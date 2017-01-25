@@ -5,7 +5,10 @@ class TestTokenizer < Minitest::Test
 
   # Test operators that can be occured individually such as ; , . [ etc
   def test_single_operator
-    tokens = tokenize(";,[]")
+    tokenizer = Tokenizer.new
+    tokenizer.text = ";,[]"
+    tokenizer.tokenize
+    tokens = tokenizer.tokens
     #test type of token
     assert_equal("OperatorToken", tokens.first.class.name)
 
@@ -21,7 +24,10 @@ class TestTokenizer < Minitest::Test
 
   #test composed operators such as <> <=
   def test_compose_operator
-    tokens = tokenize("<><=<>=")
+    tokenizer = Tokenizer.new
+    tokenizer.text = "<><=<>="
+    tokenizer.tokenize
+    tokens = tokenizer.tokens
 
     #test type of token
     assert_equal("OperatorToken", tokens.first.class.name)
@@ -40,7 +46,10 @@ class TestTokenizer < Minitest::Test
 
   # test word operator such as and or not
   def test_word_operator
-    tokens = tokenize("and or")
+    tokenizer = Tokenizer.new
+    tokenizer.text = "and or"
+    tokenizer.tokenize
+    tokens = tokenizer.tokens
 
     #test type of token
     assert_equal("OperatorToken", tokens.first.class.name)
@@ -56,13 +65,17 @@ class TestTokenizer < Minitest::Test
 
   # test key words such as if else then etc
   def test_key_word
-    tokens = tokenize("if then else")
+
+    tokenizer = Tokenizer.new
+    tokenizer.text = "if then else"
+    tokenizer.tokenize
+    tokens = tokenizer.tokens
     #test type of token
     assert_equal("KeyWordToken", tokens.first.class.name)
 
     #test values
     assert_equal("IF", tokens.first.val)
-    assert_equal("THEN", tokens[2].val)
+    assert_equal("THEN", tokens[1].val)
     assert_equal("ELSE", tokens.last.val)
 
     #test position
@@ -72,15 +85,19 @@ class TestTokenizer < Minitest::Test
 
   #test idenditifer
   def test_identifier
-    tokens = tokenize("x xy x_y xy11 x_1_yy")
+    tokenizer = Tokenizer.new
+    tokenizer.text = "x xy x_y xy11 x_1_yy"
+    tokenizer.tokenize
+    tokens = tokenizer.tokens
+
     #test type of token
     assert_equal("IdToken", tokens.first.class.name)
 
     #test values
     assert_equal("x", tokens.first.val)
-    assert_equal("xy", tokens[2].val)
-    assert_equal("x_y", tokens[4].val)
-    assert_equal("xy11", tokens[6].val)
+    assert_equal("xy", tokens[1].val)
+    assert_equal("x_y", tokens[2].val)
+    assert_equal("xy11", tokens[3].val)
     assert_equal("x_1_yy", tokens.last.val)
 
     #test position
@@ -90,34 +107,46 @@ class TestTokenizer < Minitest::Test
 
   # test integer number
   def test_integer
-    tokens = tokenize("0 123 9")
+    tokenizer = Tokenizer.new
+    tokenizer.text = "0 123 9"
+    tokenizer.tokenize
+    tokens = tokenizer.tokens
+
     #test type of token
     assert_equal("IntegerToken", tokens.first.class.name)
 
     #test values
     assert_equal("0", tokens.first.val)
-    assert_equal("123", tokens[2].val)
-    assert_equal("9", tokens[4].val)
+    assert_equal("123", tokens[1].val)
+    assert_equal("9", tokens.last.val)
   end
 
   # test float number
   def test_float
-    tokens = tokenize("0.022 123.231 9.321")
+    tokenizer = Tokenizer.new
+    tokenizer.text = "0.022 123.231 9.321"
+    tokenizer.tokenize
+    tokens = tokenizer.tokens
+
     #test type of token
     assert_equal("FloatToken", tokens[2].class.name)
 
     #test values
     assert_equal("0.022", tokens.first.val)
-    assert_equal("123.231", tokens[2].val)
-    assert_equal("9.321", tokens[4].val)
+    assert_equal("123.231", tokens[1].val)
+    assert_equal("9.321", tokens.last.val)
   end
 
   #test special case of float number
 
   def test_special_float
-    tokens = tokenize("20.0 0.0")
+    tokenizer = Tokenizer.new
+    tokenizer.text = "20.0 0.0"
+    tokenizer.tokenize
+    tokens = tokenizer.tokens
+
     #test type of token
-    assert_equal("FloatToken", tokens[2].class.name)
+    assert_equal("FloatToken", tokens.last.class.name)
 
     #test values
     assert_equal("20.0", tokens.first.val)
@@ -128,6 +157,37 @@ class TestTokenizer < Minitest::Test
     assert_equal(8, tokens.last.end_index)
   end
 
+
+  def test_error_identifiers
+    tokenizer = Tokenizer.new
+    tokenizer.text = "ax%%x= 3"
+    tokenizer.tokenize
+    tokens = tokenizer.tokens
+
+    #test type of the tokens
+    assert_equal("ErrorToken", tokens.first.class.name)
+    assert_equal("IdToken", tokens[2].class.name)
+
+    #test values
+    assert_equal("%", tokens.first.val)
+    assert_equal("Ilegal character in variables: %", tokens.first.description)
+    assert_equal("axx", tokens[2].val)
+    assert_equal("ASSIGMENT", tokens[3].val )
+  end
+
+  def test_error_number
+    tokenizer = Tokenizer.new
+    tokenizer.text = "20.000 0767 431abc"
+    tokenizer.tokenize
+    tokens = tokenizer.tokens
+
+    assert_equal("ErrorToken", tokens[1].class.name)
+    assert_equal("ErrorToken", tokens[2].class.name)
+    assert_equal("20.0", tokens.first.val)
+    assert_equal("00", tokens[1].val)
+    assert_equal("0", tokens[2].val)
+    assert_equal("431", tokens[4].val)
+  end
   # test multiple tokens
   def test_multiple_tokens
   end

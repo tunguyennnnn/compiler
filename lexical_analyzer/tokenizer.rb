@@ -41,8 +41,10 @@ class WhiteSpaceToken < Token
 end
 
 class ErrorToken < Token
-  def initialize(token, line_info, index_info)
+  attr_reader :description
+  def initialize(token, line_info, index_info, description)
     super(token, line_info, index_info)
+    @description = description
   end
 end
 
@@ -52,8 +54,8 @@ NON_ZERO = (1..9).to_a.map{|x| x.to_s}
 WHITE_SPACE = ["\t", ' ', '\n']
 
 KEY_WORDS = ["if", "then", "else", "for", "class", "int", "float", "get", "put", "return", "program"]
-OPERATOR = ["==", "<>", "<", "<=", ">", ">=", ";", ",", ".", "+", "-", "*", "/", "=",
-            "and", "not", "or", "[", "]", "{", "}", "(", ")", "/*", "*/", "//"]
+LEGAL_SYMS = ["=", "<", ">", ";", ",", ".", "+", "-", "*", "/", "=",
+             "[", "]", "{", "}", "(", ")"]
 
 
 WORD_OPERATORS = ["and", "not", "or"]
@@ -134,147 +136,157 @@ def read_file(file_name)
   return texts
 end
 
+class Tokenizer
+  attr_reader :tokens, :position, :line, :index
+  attr_accessor :text
+  LETTER = ("a".."z").to_a + ("A".."Z").to_a
+  DIGIT = (0..9).to_a.map{|x| x.to_s}
+  NON_ZERO = (1..9).to_a.map{|x| x.to_s}
+  WHITE_SPACE = ["\t", ' ', '\n']
+  KEY_WORDS = ["if", "then", "else", "for", "class", "int", "float", "get", "put", "return", "program"]
+  WORD_OPERATORS = ["and", "not", "or"]
+  SINGLE_OPERATOR = [";", ",", "+", "-", "[", "]", "{", "}", "(", ")", "."]
 
-def tokenize(chars)
-  tokens = []
-  position = index = 0
-  line = 1
-  while position < chars.length
-    char = chars[position]
-    position +=1
-    next_char = chars[position]
-    case char
-    when "="
-      if next_char == "="
-        tokens.push(OperatorToken.new("==", line, index))
-        index += 2
-        position += 1
-      else
-        index += 1
-        tokens.push(OperatorToken.new(char, line, index))
-      end
-    when "<"
-      if next_char == ">"
-        tokens.push(OperatorToken.new("<>", line, index))
-        index += 2
-        position += 1
-      elsif next_char == "="
-        tokens.push(OperatorToken.new("<=", line, index))
-        index += 2
-        position += 1
-      else
-        tokens.push(OperatorToken.new(char, line, index))
-        index += 1
-      end
-    when ">"
-      if next_char == "="
-        tokens.push(OperatorToken.new(">=", line, index))
-        index += 2
-        position += 1
-      else
-        tokens.push(OperatorToken.new(char, line, index))
-        index += 1
-      end
-    when *SINGLE_OPERATOR
-      tokens.push(OperatorToken.new(char, line, index))
-      index += 1
-    when "*"
-      if next_char == "/"
-        tokens.push(OperatorToken.new("*/", line, index))
-        index += 2
-        position += 1
-      else
-        tokens.push(OperatorToken.new(char, line, index))
-        index +=1
-      end
-    when "/"
-      if next_char == "/"
-        tokens.push(OperatorToken.new("//", line, index))
-        index +=2
-        position += 1
-      elsif next_char == "*"
-        tokens.push(OperatorToken.new("/*", line, index))
-        index += 2
-        position += 1
-      else
-        tokens.push(OperatorToken.new(char, line, index))
-        index += 1
-      end
+  COMPOSED_OPERATOR = {"=" => ["="],
+                       ">" => ["="],
+                       "<" => [">", "="],
+                       "*" => ["/"],
+                       "/" => ["/", "*"]}
 
-    when *LETTER
-      accum = char
-      while LETTER.include?(next_char) || DIGIT.include?(next_char) || next_char == '_'
-        accum += next_char
-        position += 1
-        next_char = chars[position]
-      end
-      if KEY_WORDS.include?(accum)
-        tokens.push(KeyWordToken.new(accum, line, index))
-      elsif WORD_OPERATORS.include?(accum)
-        tokens.push(OperatorToken.new(accum, line, index))
-      else
-        tokens.push(IdToken.new(accum, line, index))
-      end
-      index += accum.length
-    when *DIGIT
-      float = false
-      accum = char
-      if char == "0"
-        if next_char == "."
-          float = true
-        elsif DIGIT.include?(next_char) || LETTER.include?(next_char)
-          while DIGIT.include?(next_char) || LETTER.include?(next_char)
-            accum += next_char
-            position += 1
-            next_char = chars[position]
-          end
-          tokens.push(ErrorToken.new(accum, line, index))
+  LEGAL_OPERATORS = WHITE_SPACE + SINGLE_OPERATOR + COMPOSED_OPERATOR.keys
+
+  def initialize
+    @tokens = []
+    @position = 0
+    @line = 1
+    @index = 0
+    @text = ''
+  end
+
+  def read_file(file_name)
+  end
+
+  def tokenize
+    while @position < @text.length
+      @char = @text[@position]
+      increment
+      case @char
+      when *SINGLE_OPERATOR
+        @tokens.push(OperatorToken.new(@char, @line, @index))
+        @index += 1
+      when *COMPOSED_OPERATOR.keys
+        handle_composed_operator(@char, COMPOSED_OPERATOR[@char])
+      when *LETTER
+        handle_letter_token
+      when *DIGIT
+        handle_digit_token
+      when *WHITE_SPACE
+        if @char == "\n"
+          @line += 1
         else
-          tokens.push(IntegerToken.new(char, line, index))
-        end
-      else
-        while DIGIT.include?(next_char)
-          accum += next_char
-          position += 1
-          next_char = chars[position]
-        end
-        if next_char == "."
-          float = true
-        elsif LETTER.include?(next_char)
-          while LETTER.include?(next_char)
-            accum += next_char
-            position += 1
-            next_char = chars[position]
-          end
-        else
-          tokens.push(IntegerToken.new(accum, line, index))
+          @index += 1
         end
       end
-      if float
-        accum += "."
-        position += 1
-        next_char = chars[position]
-        while DIGIT.include?(next_char)
-          accum += next_char
-          position += 1
-          next_char = chars[position]
-        end
-        if accum[-1] == "." || accum[-1] == "0" && accum[-2] != "."
-          tokens.push(ErrorToken.new(accum, line, index))
-        else
-          tokens.push(FloatToken.new(accum, line, index))
-        end
-      end
-      index += accum.length
-    when *WHITE_SPACE
-      if char == '\n'
-        line += 1
-        index = 0
-      else
-        index += 1
-      end
-      tokens.push(WhiteSpaceToken.new(char, line, index))
     end
   end
-  return tokens
+
+  def handle_letter_token
+    accumulator = @char
+    until LEGAL_OPERATORS.include?(@next_char) || @next_char.nil?
+      if can_follow_id?(@next_char)
+        accumulator += @next_char
+      else
+        @tokens.push(ErrorToken.new(@next_char, @line, @index, "Ilegal character in variables: #{@next_char}"))
+        @index += 1
+      end
+      increment
+    end
+
+    if KEY_WORDS.include?(accumulator)
+      @tokens.push(KeyWordToken.new(accumulator, @line, @index))
+    elsif WORD_OPERATORS.include?(accumulator)
+      @tokens.push(OperatorToken.new(accumulator, @line, @index))
+    else
+      @tokens.push(IdToken.new(accumulator, @line, @index))
+    end
+    @index += accumulator.length
+  end
+
+  def can_follow_id?(char)
+    LETTER.include?(char) || DIGIT.include?(char) || char == "_"
+  end
+
+  def handle_composed_operator(start_operator, follow_operators)
+    if follow_operators.include?(@next_char)
+      @tokens.push(OperatorToken.new(start_operator + @next_char, @line, @index))
+      @index += 2
+      increment
+    else
+      @tokens.push(OperatorToken.new(start_operator, @line, @index))
+      @index += 1
+    end
+  end
+
+  def handle_digit_token
+    accumulator = @char
+    float = false
+    if @char == "0"
+      if @next_char == "."
+        float = true
+      elsif DIGIT.include?(@next_char)
+        @tokens.push(ErrorToken.new(@char, @line, @index, "Illegal number: starts with #{@char}"))
+        @index += 1
+      else
+        @tokens.push(IntegerToken.new(@char, @line, @index))
+        @index += 1
+      end
+    else
+      while DIGIT.include?(@next_char)
+        accumulator += @next_char
+        increment
+      end
+      if @next_char == "."
+        float = true
+      else
+        @tokens.push(IntegerToken.new(accumulator, @line, @index))
+      end
+    end
+
+    if float
+      accumulator += "."
+      increment
+      while DIGIT.include?(@next_char)
+        accumulator += @next_char
+        increment
+      end
+
+      if accumulator[-1] == "."
+        @tokens.push(FloatToken.new(accumulator + "0", @line, @index))
+        @index += (accumulator.length + 1)
+      elsif accumulator[-1] == "0" && accumulator[-2] != "."
+        error_accumulator = ""
+        while accumulator[-2] != "."
+          if accumulator[-1] == "0"
+            error_accumulator += accumulator[-1]
+            accumulator = accumulator[0..-2]
+          else
+            break
+          end
+        end
+        @tokens.push(FloatToken.new(accumulator, @line, @index))
+        @index += accumulator.length
+        @tokens.push(ErrorToken.new(error_accumulator.reverse, @line, @index, "Ilegal Float #{accumulator}: follows by #{error_accumulator.reverse}"))
+        @index += error_accumulator.length
+      else
+        @tokens.push(FloatToken.new(accumulator, @line, @index))
+        @index += accumulator.length
+      end
+    end
+  end
+
+  def increment
+    @position += 1
+    @next_char = @text[@position]
+  end
+
 end
