@@ -157,7 +157,7 @@ class TestTokenizer < Minitest::Test
     assert_equal(8, tokens.last.end_index)
   end
 
-
+  # Test vairable combining with illegal symbols.
   def test_error_identifiers
     tokenizer = Tokenizer.new
     tokenizer.text = "ax%%x= 3"
@@ -172,9 +172,10 @@ class TestTokenizer < Minitest::Test
     assert_equal("ax", tokens.first.val)
     assert_equal("Illegal Symbol %", tokens[1].description)
     assert_equal("%", tokens[2].val)
-    assert_equal("ASSIGMENT", tokens[4].val )
+    assert_equal("ASSIGMENT", tokens[4].val)
   end
 
+  # test error number token: first, a float ends with 0s. second, an integer starts with 0
   def test_error_number
     tokenizer = Tokenizer.new
     tokenizer.text = "20.000 0767 431abc"
@@ -188,8 +189,18 @@ class TestTokenizer < Minitest::Test
     assert_equal("0", tokens[2].val)
     assert_equal("431", tokens[4].val)
   end
-  # test multiple tokens
 
+  # test multiple tokens, the chunk of code to test is:
+  '''
+  class Foo {
+    int abcd;
+    float a_xas_1 = 242.9032##;
+
+    int function1(int x){
+      return x>= 3;
+    }
+  }
+  '''
   def test_composed_tokens
     tokenizer = Tokenizer.new
     tokenizer.read_file("text.txt")
@@ -197,10 +208,10 @@ class TestTokenizer < Minitest::Test
     tokens = tokenizer.tokens
 
     #first token
-    assert_equal("CLASS", tokens.first.val)
-    assert_equal("KeyWordToken", tokens.first.class.name)
-    assert_equal(1, tokens.first.line_info)
-    assert_equal(0, tokens.first.start_index)
+    assert_equal("CLASS", tokens.first.val) #value test
+    assert_equal("KeyWordToken", tokens.first.class.name) #type test
+    assert_equal(1, tokens.first.line_info) #line number
+    assert_equal(0, tokens.first.start_index) #index 
 
     #second token
     assert_equal("Foo", tokens[1].val)
