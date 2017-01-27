@@ -1,0 +1,2 @@
+Type: ErrorToken   Value: #   Line number: 3   Index: 26  Description: Illegal Symbol # 
+Type: ErrorToken   Value: #   Line number: 3   Index: 27  Description: Illegal Symbol # 

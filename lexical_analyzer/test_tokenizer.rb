@@ -165,14 +165,14 @@ class TestTokenizer < Minitest::Test
     tokens = tokenizer.tokens
 
     #test type of the tokens
-    assert_equal("ErrorToken", tokens.first.class.name)
-    assert_equal("IdToken", tokens[2].class.name)
+    assert_equal("ErrorToken", tokens[1].class.name)
+    assert_equal("IdToken", tokens[3].class.name)
 
     #test values
-    assert_equal("%", tokens.first.val)
-    assert_equal("Ilegal character in variables: %", tokens.first.description)
-    assert_equal("axx", tokens[2].val)
-    assert_equal("ASSIGMENT", tokens[3].val )
+    assert_equal("ax", tokens.first.val)
+    assert_equal("Illegal Symbol %", tokens[1].description)
+    assert_equal("%", tokens[2].val)
+    assert_equal("ASSIGMENT", tokens[4].val )
   end
 
   def test_error_number
@@ -189,7 +189,53 @@ class TestTokenizer < Minitest::Test
     assert_equal("431", tokens[4].val)
   end
   # test multiple tokens
-  def test_multiple_tokens
-  end
 
+  def test_composed_tokens
+    tokenizer = Tokenizer.new
+    tokenizer.read_file("text.txt")
+    tokenizer.tokenize
+    tokens = tokenizer.tokens
+
+    #first token
+    assert_equal("CLASS", tokens.first.val)
+    assert_equal("KeyWordToken", tokens.first.class.name)
+    assert_equal(1, tokens.first.line_info)
+    assert_equal(0, tokens.first.start_index)
+
+    #second token
+    assert_equal("Foo", tokens[1].val)
+    assert_equal("IdToken", tokens[1].class.name)
+    assert_equal(1, tokens[1].line_info)
+    assert_equal(6, tokens[1].start_index)
+
+    #second token
+    assert_equal("INT", tokens[3].val)
+    assert_equal("KeyWordToken", tokens[3].class.name)
+    assert_equal(2, tokens[3].line_info)
+    assert_equal(2, tokens[3].start_index)
+
+    #third token
+    assert_equal("SEMICOLON", tokens[5].val)
+    assert_equal("OperatorToken", tokens[5].class.name)
+    assert_equal(2, tokens[5].line_info)
+    assert_equal(10, tokens[5].start_index)
+
+    #fourth token
+    assert_equal("242.9032", tokens[9].val)
+    assert_equal("FloatToken", tokens[9].class.name)
+    assert_equal(3, tokens[9].line_info)
+    assert_equal(18, tokens[9].start_index)
+
+    #fifth token
+    assert_equal("function1", tokens[14].val)
+    assert_equal("IdToken", tokens[14].class.name)
+    assert_equal(5, tokens[14].line_info)
+    assert_equal(6, tokens[14].start_index)
+
+    #sixth token
+    assert_equal("GREATE-OR-EQUAL", tokens[22].val)
+    assert_equal("OperatorToken", tokens[22].class.name)
+    assert_equal(6, tokens[22].line_info)
+    assert_equal(12, tokens[22].start_index)
+  end
 end

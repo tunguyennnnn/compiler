@@ -1,148 +1,14 @@
-class Token
-  attr_reader :val, :line_info, :start_index, :end_index
+require_relative 'token'
 
-  def initialize(token, line_info, index_info)
-    @val = token
-    @line_info = line_info
-    @start_index = index_info
-    @end_index = index_info +  token.length
-  end
-end
-
-class IdToken < Token
-  def initialize(token, line_info, index_info)
-    super(token, line_info, index_info)
-  end
-end
-
-
-class KeyWordToken < Token
-  def initialize(token, line_info, index_info)
-    super(token.upcase, line_info, index_info)
-  end
-end
-
-class NumberToken < Token
-  def initialize(token, line_info, index_info)
-    super(token, line_info, index_info)
-  end
-end
-
-class IntegerToken < NumberToken
-end
-
-class FloatToken < NumberToken
-end
-
-class WhiteSpaceToken < Token
-  def initialize(token, line_info, index_info)
-    super(token, line_info, index_info)
-  end
-end
-
-class ErrorToken < Token
-  attr_reader :description
-  def initialize(token, line_info, index_info, description)
-    super(token, line_info, index_info)
-    @description = description
-  end
-end
-
-LETTER = ("a".."z").to_a + ("A".."Z").to_a
-DIGIT = (0..9).to_a.map{|x| x.to_s}
-NON_ZERO = (1..9).to_a.map{|x| x.to_s}
-WHITE_SPACE = ["\t", ' ', '\n']
-
-KEY_WORDS = ["if", "then", "else", "for", "class", "int", "float", "get", "put", "return", "program"]
-LEGAL_SYMS = ["=", "<", ">", ";", ",", ".", "+", "-", "*", "/", "=",
-             "[", "]", "{", "}", "(", ")"]
-
-
-WORD_OPERATORS = ["and", "not", "or"]
-
-SINGLE_OPERATOR = [";", ",", "+", "-", "[", "]", "{", "}", "(", ")", "."]
-
-
-
-class OperatorToken <Token
-  def initialize(token, line_info, index_info)
-    super(token, line_info, index_info)
-    case token
-    when ";"
-      @val = "SEMICOLON"
-    when ","
-      @val = "COLON"
-    when "."
-      @val = "DOT"
-    when "+"
-      @val = "ADDITION"
-    when "-"
-      @val = "SUBTRACTION"
-    when "["
-      @val = "LEFT-SQUARE-BRACKET"
-    when "]"
-      @val = "RIGHT-SQUARE-BRACKET"
-    when "("
-      @val = "LEFT-BRACKET"
-    when ")"
-      @val = "RIGHT-BRACKET"
-    when "{"
-      @val = "LEFT-CURLY-BRACKET"
-    when "}"
-      @val = "RIGHT-CURLY-BRACKET"
-    when "<"
-      @val = "LESS-THAN"
-    when ">"
-      @val = "GREATER-THAN"
-    when ">="
-      @val = "GREATE-OR-EQUAL"
-    when "<="
-      @val = "LESS-OR-EQUAL"
-    when "<>"
-      @val = "TEMPLATE"
-    when "/"
-      @val = "DIVISION"
-    when "*"
-      @val = "MULTIPLICATION"
-    when "/*"
-      @val = "COMMENT-START"
-    when "*/"
-      @val = "COMMENT-END"
-    when "//"
-      @val = "COLON"
-    when "and"
-      @val = "AND"
-    when "or"
-      @val = "OR"
-    when "not"
-      @val = "NEGATION"
-    when "=="
-      @val = "COMPARISION"
-    when "="
-      @val = "ASSIGMENT"
-    end
-  end
-end
-
-
-
-def read_file(file_name)
-  file = File.new(file_name, 'r')
-  texts = []
-  while line = file.gets
-    texts.push(line)
-  end
-  file.close
-  return texts
-end
 
 class Tokenizer
   attr_reader :tokens, :position, :line, :index
   attr_accessor :text
+
   LETTER = ("a".."z").to_a + ("A".."Z").to_a
   DIGIT = (0..9).to_a.map{|x| x.to_s}
   NON_ZERO = (1..9).to_a.map{|x| x.to_s}
-  WHITE_SPACE = ["\t", ' ', '\n']
+  WHITE_SPACE = ["\t", ' ', "\n"]
   KEY_WORDS = ["if", "then", "else", "for", "class", "int", "float", "get", "put", "return", "program"]
   WORD_OPERATORS = ["and", "not", "or"]
   SINGLE_OPERATOR = [";", ",", "+", "-", "[", "]", "{", "}", "(", ")", "."]
@@ -164,6 +30,34 @@ class Tokenizer
   end
 
   def read_file(file_name)
+    file = File.new(file_name, 'r')
+    while (line = file.gets)
+      @text += line
+    end
+    file.close
+  end
+
+
+  def write_to_file(file_name)
+    File.open(file_name, 'w+'){|file|
+      file.write(@tokens.map{|tk| tk.pretty_printing}.join("\n"))
+    }
+  end
+
+  def write_error
+    File.open('error.txt', 'w+'){ |file|
+      @tokens.each do |token|
+        if token.class == ErrorToken
+          file.write(token.pretty_printing)
+        end
+      end
+    }
+  end
+
+  def remove_error
+    @tokens.delete_if do |token|
+      token.class == ErrorToken
+    end
   end
 
   def tokenize
@@ -183,22 +77,21 @@ class Tokenizer
       when *WHITE_SPACE
         if @char == "\n"
           @line += 1
+          @index = 0
         else
           @index += 1
         end
+      else
+        tokens.push(ErrorToken.new(@char, @line, @index, "Illegal Symbol #{@char}"))
+        @index += 1
       end
     end
   end
 
   def handle_letter_token
     accumulator = @char
-    until LEGAL_OPERATORS.include?(@next_char) || @next_char.nil?
-      if can_follow_id?(@next_char)
-        accumulator += @next_char
-      else
-        @tokens.push(ErrorToken.new(@next_char, @line, @index, "Ilegal character in variables: #{@next_char}"))
-        @index += 1
-      end
+    while can_follow_id?(@next_char)
+      accumulator += @next_char
       increment
     end
 

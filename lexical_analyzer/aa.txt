@@ -1,0 +1,29 @@
+Type: KeyWordToken   Value: CLASS   Line number: 1   Index: 0
+Type: IdToken   Value: Foo   Line number: 1   Index: 6
+Type: OperatorToken   Value: LEFT-CURLY-BRACKET   Line number: 1   Index: 10
+Type: KeyWordToken   Value: INT   Line number: 2   Index: 2
+Type: IdToken   Value: abcd   Line number: 2   Index: 6
+Type: OperatorToken   Value: SEMICOLON   Line number: 2   Index: 10
+Type: KeyWordToken   Value: FLOAT   Line number: 3   Index: 2
+Type: IdToken   Value: a_xas_1   Line number: 3   Index: 8
+Type: OperatorToken   Value: ASSIGMENT   Line number: 3   Index: 16
+Type: FloatToken   Value: 242.9032   Line number: 3   Index: 18
+Type: ErrorToken   Value: #   Line number: 3   Index: 26  Description: Illegal Symbol # 
+
+Type: ErrorToken   Value: #   Line number: 3   Index: 27  Description: Illegal Symbol # 
+
+Type: OperatorToken   Value: SEMICOLON   Line number: 3   Index: 28
+Type: KeyWordToken   Value: INT   Line number: 5   Index: 2
+Type: IdToken   Value: function1   Line number: 5   Index: 6
+Type: OperatorToken   Value: LEFT-BRACKET   Line number: 5   Index: 15
+Type: KeyWordToken   Value: INT   Line number: 5   Index: 16
+Type: IdToken   Value: x   Line number: 5   Index: 20
+Type: OperatorToken   Value: RIGHT-BRACKET   Line number: 5   Index: 21
+Type: OperatorToken   Value: LEFT-CURLY-BRACKET   Line number: 5   Index: 22
+Type: KeyWordToken   Value: RETURN   Line number: 6   Index: 4
+Type: IdToken   Value: x   Line number: 6   Index: 11
+Type: OperatorToken   Value: MULTIPLICATION   Line number: 6   Index: 12
+Type: IdToken   Value: x   Line number: 6   Index: 13
+Type: OperatorToken   Value: SEMICOLON   Line number: 6   Index: 14
+Type: OperatorToken   Value: RIGHT-CURLY-BRACKET   Line number: 7   Index: 2
+Type: OperatorToken   Value: RIGHT-CURLY-BRACKET   Line number: 8   Index: 0
