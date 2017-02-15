@@ -1,0 +1,53 @@
+Prog			class, program	$
+ClassDecs	Nullable		class	program
+ClassDec			class	class, program
+ClassBody	Nullable		id, float, int	}
+VarOrFuncDecl			;, (, [	}
+VarDecls	Nullable		id, float, int
+FuncDefs	Nullable		id, float, int	}, $
+ProgBody			program	$
+FuncHead			id, float, int	{
+FuncDef			id, float, int	id, }, float, int, $
+FuncBody			{	;
+FuncBodyInner	Nullable		id, float, int, if, for, get, put, return	}
+VarDeclTail			id	}
+VarDeclorAssignStat			id, [, =	}
+VarDecl			id, float, int	id, float, int
+Statements	Nullable		id, if, for, get, put, return	}
+ArraySizes	Nullable		[	;, ), ,
+Statement			id, if, for, get, put, return	id, }, ;, if, else, for, get, put, return
+StatmentSpecial			if, for, get, put, return	id, }, ;, if, else, for, get, put, return
+AssignStat			id	;, )
+StatBlock	Nullable		id, {, if, for, get, put, return	;, else
+Expr			id, (, +, -, floatNumber, integerNumber, not	;, ), ,
+RelExprTail	Nullable		==, <>, <, >, <=, >=	;, ), ,
+RelExpr			id, (, +, -, floatNumber, integerNumber, not	;
+ArithExpr			id, (, +, -, floatNumber, integerNumber, not	;, ), ], ,, ==, <>, <, >, <=, >=
+ArithExprDs	Nullable		+, -, or	;, ), ], ,, ==, <>, <, >, <=, >=
+ArithExprD			+, -, or	;, ), +, -, ], ,, ==, <>, <, >, <=, >=, or
+Sign			+, -	id, (, +, -, floatNumber, integerNumber, not
+Term			id, (, +, -, floatNumber, integerNumber, not	;, ), +, -, ], ,, ==, <>, <, >, <=, >=, or
+TermDs	Nullable		*, /, and	;, ), +, -, ], ,, ==, <>, <, >, <=, >=, or
+TermD			*, /, and	;, ), +, -, ], ,, ==, <>, <, >, <=, >=, or, *, /, and
+Factor			id, (, +, -, floatNumber, integerNumber, not	;, ), +, -, ], ,, ==, <>, <, >, <=, >=, or, *, /, and
+VarHead			id	;, ), +, -, ], ,, ==, <>, <, >, <=, >=, or, *, /, and
+VarHeadTail	Nullable		(, ., [	;, ), +, -, ], ,, ==, <>, <, >, <=, >=, or, *, /, and
+VarHeadEnd	Nullable		.	;, ), +, -, ], ,, ==, <>, <, >, <=, >=, or, *, /, and
+Idnests	Nullable		id
+Variable			id	), =
+VariableTail	Nullable		.	), =
+Indices	Nullable		[	;, ), +, -, ., ], ,, =, ==, <>, <, >, <=, >=, or, *, /, and
+Idnest			id	id
+Indice			[	;, ), +, -, ., [, ], ,, =, ==, <>, <, >, <=, >=, or, *, /, and
+ArraySize			[	;, ), [, ,
+Type			id, float, int	id
+FParams	Nullable		id, float, int	)
+FParamsTails	Nullable		,	)
+AParams	Nullable		id, (, +, -, floatNumber, integerNumber, not	)
+AParamsTails	Nullable		,	)
+FParamsTail			,	), ,
+AParamsTail			,	), ,
+AssignOp			=	id, (, +, -, floatNumber, integerNumber, not
+RelOp			==, <>, <, >, <=, >=	id, (, +, -, floatNumber, integerNumber, not
+AddOp			+, -, or	id, (, +, -, floatNumber, integerNumber, not
+MultOp			*, /, and	id, (, +, -, floatNumber, integerNumber, not

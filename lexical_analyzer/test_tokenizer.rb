@@ -13,8 +13,8 @@ class TestTokenizer < Minitest::Test
     assert_equal("OperatorToken", tokens.first.class.name)
 
     #test value of token
-    assert_equal("SEMICOLON", tokens.first.val)
-    assert_equal("RIGHT-SQUARE-BRACKET", tokens.last.val)
+    assert_equal("SEMICOLON", tokens.first.val_name)
+    assert_equal("RIGHT-SQUARE-BRACKET", tokens.last.val_name)
 
     #test position of [
     assert_equal(1, tokens[2].line_info)
@@ -33,10 +33,10 @@ class TestTokenizer < Minitest::Test
     assert_equal("OperatorToken", tokens.first.class.name)
 
     #test values
-    assert_equal("TEMPLATE", tokens.first.val)
-    assert_equal("LESS-OR-EQUAL", tokens[1].val)
-    assert_equal("TEMPLATE", tokens[2].val)
-    assert_equal("ASSIGMENT", tokens.last.val)
+    assert_equal("TEMPLATE", tokens.first.val_name)
+    assert_equal("LESS-OR-EQUAL", tokens[1].val_name)
+    assert_equal("TEMPLATE", tokens[2].val_name)
+    assert_equal("ASSIGMENT", tokens.last.val_name)
 
     #test position of <=
     assert_equal(1, tokens[1].line_info)
@@ -172,7 +172,7 @@ class TestTokenizer < Minitest::Test
     assert_equal("ax", tokens.first.val)
     assert_equal("Illegal Symbol %", tokens[1].description)
     assert_equal("%", tokens[2].val)
-    assert_equal("ASSIGMENT", tokens[4].val)
+    assert_equal("ASSIGMENT", tokens[4].val_name)
   end
 
   # test error number token: first, a float ends with 0s. second, an integer starts with 0
@@ -211,7 +211,7 @@ class TestTokenizer < Minitest::Test
     assert_equal("CLASS", tokens.first.val) #value test
     assert_equal("KeyWordToken", tokens.first.class.name) #type test
     assert_equal(1, tokens.first.line_info) #line number
-    assert_equal(0, tokens.first.start_index) #index 
+    assert_equal(0, tokens.first.start_index) #index
 
     #second token
     assert_equal("Foo", tokens[1].val)
@@ -226,7 +226,7 @@ class TestTokenizer < Minitest::Test
     assert_equal(2, tokens[3].start_index)
 
     #third token
-    assert_equal("SEMICOLON", tokens[5].val)
+    assert_equal("SEMICOLON", tokens[5].val_name)
     assert_equal("OperatorToken", tokens[5].class.name)
     assert_equal(2, tokens[5].line_info)
     assert_equal(10, tokens[5].start_index)
@@ -244,7 +244,7 @@ class TestTokenizer < Minitest::Test
     assert_equal(6, tokens[14].start_index)
 
     #sixth token
-    assert_equal("GREATE-OR-EQUAL", tokens[22].val)
+    assert_equal("GREATE-OR-EQUAL", tokens[22].val_name)
     assert_equal("OperatorToken", tokens[22].class.name)
     assert_equal(6, tokens[22].line_info)
     assert_equal(12, tokens[22].start_index)
