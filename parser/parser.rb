@@ -74,13 +74,13 @@ class String
 end
 
 class Parsing
-  attr_reader :tokens, :look_ahead
+  attr_reader :tokens, :look_ahead, :stack
   def initialize(tokens, set_table)
     @tokens = tokens
     @tokens.push("$")
     @set_table = set_table
     @index = 0
-    @stack = ""
+    @stack = []
   end
 
   def parse
@@ -100,8 +100,8 @@ class Parsing
     end
   end
 
-  def write(derivation)
-    @stack += "#{derivation}\n"
+  def write(rhs, *lhs)
+    @stack.push([rhs] + lhs)
     return true
   end
 
@@ -126,9 +126,13 @@ class Parsing
 
   def prog
     if @set_table["ClassDecs"].first_set_include? @look_ahead
-      return classDecl_star() && progBody()
+      if classDecl_star() && progBody()
+        write "Prog", "ClassDecls", "ProgBody"
+      end
     elsif @set_table["ProgBody"].first_set_include? @look_ahead
-      return progBody()
+      if progBody()
+        write "Prog", "ProgBody"
+      end
     else
       false
     end
@@ -136,360 +140,484 @@ class Parsing
 
   def classDecl_star
     if @set_table['ClassDec'].first_set_include? @look_ahead
-      return classDecl() && classDecl_star()
+      if classDecl() && classDecl_star()
+        write "ClassDecls", "ClassDecl", "ClassDecls"
+      end
     elsif @set_table['ClassDecs'].follow_set_include? @look_ahead
-      return true
+      write "ClassDecls", "epsilon"
     end
   end
 
   def classDecl
     if look_ahead_is "class"
-      return match("class") && match("id") && match("{") && classBody() && match("}") && match(";")
+      if match("class") && match("id") && match("{") && classBody() && match("}") && match(";")
+        write "ClassDecl", "class", "idToken", "{", "ClassBody", "}", ";"
+      end
     end
   end
 
   def classBody
     if @set_table["Type"].first_set_include? @look_ahead
-      return type() && match("id") && varOrFuncDecl()
+      if type() && match("id") && varOrFuncDecl()
+        write "ClassBody", "Type", "idToken", "VarOrFuncDecl"
+      end
     elsif @set_table["ClassBody"].follow_set_include? @look_ahead
-      return true
+      write "ClassBody", "epsilon"
     end
   end
 
   def varOrFuncDecl
     if @set_table["ArraySizes"].first_set_include? @look_ahead
-      return arraySize_star() && match(";") && classBody()
+      if arraySize_star() && match(";") && classBody()
+        write "VarOrFuncDecl", "ArraySizes()", ";", "ClassBody"
+      end
     elsif look_ahead_is ";"
-      return match(";") && classBody()
+      if match(";") && classBody()
+        write "VarOrFuncDecl", ";", "ClassBody"
+      end
     elsif look_ahead_is "("
-      return match("(") && fParams() && match(")") && funcBody() && match(";") && funcDef_star()
+      if match("(") && fParams() && match(")") && funcBody() && match(";") && funcDef_star()
+        write "VarOrFuncDecl", "FParams", ")", "FuncBody", ";", "FuncDecls"
+      end
     end
   end
 
   def varDecl_star
     if @set_table["VarDecl"].first_set_include? @look_ahead
-      return varDecl() && varDecl_star()
+      if varDecl() && varDecl_star()
+        write "VarDecls", "VarDecl" , "VarDecls"
+      end
     elsif @set_table["VarDecls"].follow_set_include? @look_ahead
-      return true
+      write "VarDecls", "epsilon"
     end
   end
 
   def funcDef_star
     if @set_table["FuncDef"].first_set_include? @look_ahead
-      return funcDef() && funcDef_star()
+      if funcDef() && funcDef_star()
+        write "FuncDecls", "FuncDecl", "FuncDecls"
+      end
     elsif @set_table["FuncDefs"].follow_set_include? @look_ahead
-      return true
-    else
-      return false
+      write "FuncDecls", "epsilon"
     end
   end
 
   def progBody
     if look_ahead_is "program"
-      return match("program") && funcBody() && match(";") && funcDef_star()
-    else
-      return false
+      if match("program") && funcBody() && match(";") && funcDef_star()
+        write "ProgBody", "program", "FuncBody", ";", "FuncDecls"
+      end
     end
   end
 
   def funcHead
     if @set_table["Type"].first_set_include? @look_ahead
-      return type() && match("id") && match("(") && fParams() && match(")")
+      if type() && match("id") && match("(") && fParams() && match(")")
+        write "FuncHead", "Type", "idToken", "(", "FParams", ")"
+      end
     end
   end
 
   def funcDef
     if @set_table["FuncHead"].first_set_include? @look_ahead
-      return funcHead() && funcBody() && match(";")
+      if funcHead() && funcBody() && match(";")
+        write "FuncDecl", "FuncHead", "FuncBody", ";"
+      end
     end
   end
 
   def funcBody
     if look_ahead_is "{"
-      return match("{") && funcBodyInner() && match("}")
+      if match("{") && funcBodyInner() && match("}")
+        write "FuncBody", "{", "FuncBodyInner", "}"
+      end
     end
   end
 
   def funcBodyInner
     if look_ahead_is "float"
-      return match("float") && varDeclTail()
+      if match("float") && varDeclTail()
+        write "FuncBodyInner", "floatToken", "VarDeclTail"
+      end
     elsif look_ahead_is "int"
-      return match("int") && varDeclTail()
+      if match("int") && varDeclTail()
+        write "FuncBodyInner", "intToken", "VarDeclTail"
+      end
     elsif look_ahead_is "id"
-      return match("id") && varDeclorAssignStat()
+      if match("id") && varDeclorAssignStat()
+        write "FuncBodyInner", "idToken", "VarDeclorAssignStat"
+      end
     elsif @set_table["StatmentSpecial"].first_set_include? @look_ahead
-      return statementSpecial() && statement_star()
+      if statementSpecial() && statement_star()
+        write "FuncBodyInner", "statementSpecial", "Statements"
+      end
     elsif @set_table["FuncBodyInner"].follow_set_include? @look_ahead
-      return true
+      write "FuncBodyInner", "epsilon"
     end
   end
 
   def varDeclTail
     if look_ahead_is "id"
-      return match("id") && arraySize_star() && match(";") && funcBodyInner()
+      if match("id") && arraySize_star() && match(";") && funcBodyInner()
+        write "VarDeclTail", "idToken", "ArraySizes", ";", "FuncBodyInner"
+      end
     end
   end
 
   def varDeclorAssignStat
     if look_ahead_is "id"
-      return match("id") && arraySize_star() && match(";") && funcBodyInner()
+      if match("id") && arraySize_star() && match(";") && funcBodyInner()
+        write "VarDeclorAssignStat", "idToken", "ArraySizes", ";", "FuncBodyInner"
+      end
     elsif @set_table["Indices"].first_set_include? @look_ahead
-      return indices() && variableTail() && assignOp() && expr() && match(";")  && statement_star()
+      if indices() && variableTail() && assignOp() && expr() && match(";")  && statement_star()
+        write "VarDeclorAssignStat", "Indices", "VariableTail", "AssignOp", "Expr", ";", "Statements"
+      end
     elsif @set_table["AssignOp"].first_set_include? @look_ahead
-      return assignOp() && expr() && match(";") && statement_star()
+      if assignOp() && expr() && match(";") && statement_star()
+        write "VarDeclorAssignStat", "AssignOp", "Expr", ";", "Statements"
+      end
     end
   end
 
   def varDecl
     if @set_table["type"].first_set_include? @look_ahead
-      return type() && match("id") && arraySize_star() && match(";")
+      if type() && match("id") && arraySize_star() && match(";")
+        write "VarDecl", "Type", "idToken", "ArraySizes", ";"
+      end
     end
   end
 
   def statement_star
     if @set_table["Statement"].first_set_include? @look_ahead
-      return statement() && statement_star()
+      if statement() && statement_star()
+        write "Statements", "Statement", "Statments"
+      end
     elsif @set_table["Statements"].follow_set_include? @look_ahead
-      return true
+      write "Statments", "epsilon"
     end
   end
 
   def arraySize_star
     if @set_table["ArraySize"].first_set_include? @look_ahead
-      return arraySize() && arraySize_star()
+      if arraySize() && arraySize_star()
+        write "ArraySizes", "ArraySize", "ArraySizes"
+      end
     elsif @set_table["ArraySizes"].follow_set_include? @look_ahead
-      return true
+      write "ArraySizes", "epsilon"
     end
   end
 
   def statement
     if @set_table["AssignStat"].first_set_include? @look_ahead
-      return assignStat() && match(";")
+      if assignStat() && match(";")
+        write "Statment", "AssignStat", ";"
+      end
     elsif @set_table["StatmentSpecial"].first_set_include? @look_ahead
-      return statementSpecial()
+      if statementSpecial()
+        write "Statment", "StatementSpecial"
+      end
     end
   end
 
   def statementSpecial
     if look_ahead_is "if"
-      return match("if") && match("(") && expr() && match(")") && match("then") && statBlock() && match("else") && statBlock() && match(";")
+      if match("if") && match("(") && expr() && match(")") && match("then") && statBlock() && match("else") && statBlock() && match(";")
+        write "StatementSpecial", "if", "(", "Expr", ")", "then", "StatBlock", "else", "StateBlock", ";"
+      end
     elsif look_ahead_is "for"
-      return match("for") && match("(") && type() && match("id") && assignOp() && expr() && match(";") && relExpr() && match(";") && assignStat() && match(")") && statBlock() && match(";")
+      if match("for") && match("(") && type() && match("id") && assignOp() && expr() && match(";") && relExpr() && match(";") && assignStat() && match(")") && statBlock() && match(";")
+        write "StatementSpecial", "for", "(", "Type", "idToken", "AssignOp", "Expr", ";", "RelExpr", ";", "AssignStat", ")" && "StatBlock" && ";"
+      end
     elsif look_ahead_is "get"
-      return match("get") && match("(") && variable() && match(")") && match(";")
+      if match("get") && match("(") && variable() && match(")") && match(";")
+        write "StatementSpecial", "get", "(", "Variable", ")", ";"
+      end
     elsif look_ahead_is "put"
-      return match("put") && match("(") && expr() && match(")") && match(";")
+      if match("put") && match("(") && expr() && match(")") && match(";")
+        write "StatementSpecial", "put", "(", "Expr", ")", ";"
+      end
     elsif look_ahead_is "return"
-      return match("return") && match("(") && expr() && match(")") && match(";")
+      if match("return") && match("(") && expr() && match(")") && match(";")
+        write "StatementSpecial", "return", "(", "Expr", ")", ";"
+      end
     end
   end
 
   def assignStat
     if @set_table["Variable"].first_set_include? @look_ahead
-      return variable() && assignOp() && expr()
+      if variable() && assignOp() && expr()
+        write "AssignStat", "Variable", "AssignOp", "Expr"
+      end
     end
   end
 
   def statBlock
     if look_ahead_is "{"
-      return match("{") && statement_star() && match("}")
+      if match("{") && statement_star() && match("}")
+        write "StatBlock", "{", "Statments", "}"
+      end
     elsif @set_table["Statement"].first_set_include? @look_ahead
-      return statement()
+      if statement()
+        write "StatBlock", "Statement"
+      end
     elsif @set_table["StatBlock"].follow_set_include? @look_ahead
-      return true
+      write "StatBlock", "epsilon"
     end
   end
 
   def expr
     if @set_table["ArithExpr"].first_set_include? @look_ahead
-      return arithExpr() && relExprTail()
+      if arithExpr() && relExprTail()
+        write "Expr", "ArithExpr", "RelExprTail"
+      end
     end
   end
 
   def relExprTail
     if @set_table["RelOp"].first_set_include? @look_ahead
-      return relOp() && arithExpr()
+      if relOp() && arithExpr()
+        write "RelExprTail", "RelOp", "ArithExpr"
+      end
     elsif @set_table["RelExprTail"].follow_set_include? @look_ahead
-      return true
+      write "RelExprTail", "epsilon"
     end
   end
+
   def relExpr
     if @set_table["ArithExpr"].first_set_include? @look_ahead
-      return arithExpr() && relOp() && arithExpr()
+      if arithExpr() && relOp() && arithExpr()
+        write "RelExpr", "ArithExpr", "RelOp", "ArithExpr"
+      end
     end
   end
 
   def arithExpr
     if @set_table["Term"].first_set_include? @look_ahead
-      return term() && arithExprD_star()
+      if term() && arithExprD_star()
+        write "ArithExpr", "Term", "ArithExprDs"
+      end
     end
   end
 
   def arithExprD_star
     if @set_table["ArithExprD"].first_set_include? @look_ahead
-      return arithExprD() && arithExprD_star()
+      if arithExprD() && arithExprD_star()
+        write "ArithExprDs", "ArithExprD", "ArithExprDs"
+      end
     elsif @set_table["ArithExprDs"].follow_set_include? @look_ahead
-      return true
+      write "ArithExprDs", "epsilon"
     end
   end
 
   def arithExprD
     if @set_table["AddOp"].first_set_include? @look_ahead
-      return addOp() && term()
+      if addOp() && term()
+        write "ArithExprD", "AddOp", "Term"
+      end
     end
   end
 
   def term
     if @set_table["Factor"].first_set_include? @look_ahead
-      return factor() && termD_star()
+      if factor() && termD_star()
+        write "Term", "Factor", "TermDs"
+      end
     end
 
   end
 
   def termD_star
     if @set_table["TermD"].first_set_include? @look_ahead
-      return termD() && termD_star()
+      if termD() && termD_star()
+        write "TermDs", "TermD", "TermDs"
+      end
     elsif @set_table["TermDs"].follow_set_include? @look_ahead
-      return true
+      write "TermDs", "epsilon"
     end
   end
 
   def termD
     if @set_table["MultOp"].first_set_include? @look_ahead
-      return mulOp() && factor()
+      if mulOp() && factor()
+        write "TermD", "MulOp", "Factor"
+      end
     end
   end
 
   def factor
     if @set_table["VarHead"].first_set_include? @look_ahead
-      return varHead()
+      if varHead()
+        write "Factor", "VarHead"
+      end
     elsif look_ahead_is "num"
-      return match("num")
+      if match("num")
+        write "Factor", "num"
+      end
     elsif look_ahead_is "("
-      return match("(") && arithExpr() && match(")")
+      if match("(") && arithExpr() && match(")")
+        write "Factor", "(", "ArithExpr", ")"
+      end
     elsif look_ahead_is "not"
-      return match("not") && factor()
+      if match("not") && factor()
+        write "Factor", "not", "Factor"
+      end
     elsif @set_table["Sign"].first_set_include? @look_ahead
-      return sign() && factor()
+      if sign() && factor()
+        write "Factor", "Sign", "Factor"
+      end
     end
   end
 
   def varHead
     if look_ahead_is "id"
-      return match("id") && varHeadTail()
+      if match("id") && varHeadTail()
+        write "VarHead", "id", "VarHeadTail"
+      end
     end
   end
 
   def varHeadTail
     if @set_table["Indices"].first_set_include? @look_ahead
-      return indice_star() && varHeadEnd()
+      if indice_star() && varHeadEnd()
+        write "VarHeadTail", "Indices", "VarHeadEnd"
+      end
     elsif @set_table["VarHeadEnd"].first_set_include? @look_ahead
-      return varHeadEnd()
+      if varHeadEnd()
+        write "VarHeadTail", "VarHeadEnd"
+      end
     elsif look_ahead_is "("
-      return match("(") && aParams() && match(")")
+      if match("(") && aParams() && match(")")
+        write "VarHeadTail", "(", "AParams", ")"
+      end
     elsif @set_table["VarHeadTail"].follow_set_include? @look_ahead
-      return true
+      write "VarHeadTail", "epsilon"
     end
   end
 
   def indice_star
     if @set_table["Indice"].first_set_include? @look_ahead
-      return indice() && indice_star()
+      if indice() && indice_star()
+        write "Indices", "Indice", "Indices"
+      end
     elsif @set_table["Indices"].follow_set_include? @look_ahead
-      return true
+      write "Indices", "epsilon"
     end
   end
 
   def varHeadEnd
-
     if look_ahead_is "."
-      return match(".") && varHead()
+      if match(".") && varHead()
+        write "VarHeadEnd", ".", "VarHead"
+      end
     elsif @set_table["VarHeadEnd"].follow_set_include? @look_ahead
-      return true
+      write "VarHeadEnd", "epsilon"
     end
   end
 
 
   def idnest
     if look_ahead_is "id"
-      return match("id") && indice_star && match(".")
+      if match("id") && indice_star && match(".")
+        write "Idnest", "idToken", "Indices", "."
+      end
     end
   end
 
   def variable
     if look_ahead_is "id"
-      return match("id") && indice_star() && variableTail()
+      if match("id") && indice_star() && variableTail()
+        write "Variable", "idToken", "Indices", "VariableTail"
+      end
     end
   end
 
   def variableTail
     if look_ahead_is "."
-      return match(".") && variable()
+      if match(".") && variable()
+        write "VariableTail", ".", "Variable"
+      end
     elsif @set_table["VariableTail"].follow_set_include? @look_ahead
-      return true
+      write "VariableTail", "epsilon"
     end
   end
 
   def indice
     if look_ahead_is "["
-      return match("[") && arithExpr() && match("]")
+      if match("[") && arithExpr() && match("]")
+        write "Indice", "[", "ArithExpr", "]"
+      end
     end
   end
 
   def arraySize
     if look_ahead_is "["
-      return match("[") && match("integer") && match("]")
+      if match("[") && match("integer") && match("]")
+        write "ArraySize", "[", "intToken", "]"
+      end
     end
   end
 
   def type
     if look_ahead_is "int" or look_ahead_is "float" or look_ahead_is "id"
-      return match(@look_ahead.val.downcase)
+      if match(@look_ahead.val.downcase)
+        write "Type", @look_ahead.val.downcase
+      end
     end
   end
 
   def fParams
     if @set_table["Type"].first_set_include? @look_ahead
-      return type() && match("id") && arraySize_star() && fParamsTail_star()
+      if type() && match("id") && arraySize_star() && fParamsTail_star()
+        write "FParams", "Type", "idToken", "ArraySizes", "FParamsTails"
+      end
     elsif @set_table["FParams"].follow_set_include? @look_ahead
-      return true
+      write "FParams", "epsilon"
     end
   end
 
   def fParamsTail_star
     if @set_table["FParamsTail"].first_set_include? @look_ahead
-      return fParamsTail() && fParamsTail_star()
+      if fParamsTail() && fParamsTail_star()
+        write "FParamsTails", "FParamsTail", "FParamsTails"
+      end
     elsif @set_table["FParamsTails"].follow_set_include? @look_ahead
-      return true
+      write "FParamsTails", "epsilon"
     end
   end
 
   def aParams
     if @set_table["Expr"].first_set_include? @look_ahead
-      x = expr()
-      return x && aParamsTail_star()
+      if expr() && aParamsTail_star()
+        write "AParams", "Expr", "AParamsTails"
+      end
     elsif @set_table["AParams"].follow_set_include? @look_ahead
-      return true
+      write "AParams", "epsilon"
     end
   end
 
   def aParamsTail_star
     if @set_table["AParamsTail"].first_set_include? @look_ahead
-      return aParamsTail() && aParamsTail_star()
+      if aParamsTail() && aParamsTail_star()
+        write "AParamsTails", "AParamsTail", "AParamsTails"
+      end
     elsif @set_table["AParamsTails"].follow_set_include? @look_ahead
-      return true
+      write "AParamsTails", "epsilon"
     end
   end
 
   def fParamsTail
     if look_ahead_is ","
-      return match(",") && type() && match("id") && arraySize_star()
+      if match(",") && type() && match("id") && arraySize_star()
+        write "FParamsTail", ",", "Type", "id", "ArraySizes"
+      end
     end
   end
 
   def aParamsTail
     if look_ahead_is ","
-      return match(",") && expr()
+      if match(",") && expr()
+        write "aParamsTail", ",", "Expr"
     end
   end
 
@@ -596,3 +724,4 @@ tokenizer.remove_error
 
 x = Parsing.new(tokenizer.tokens, a.table)
 puts x.parse
+puts x.stack
