@@ -11,7 +11,7 @@ FuncDef			id, float, int	id, }, float, int, $
 FuncBody			{	;
 FuncBodyInner	Nullable		id, float, int, if, for, get, put, return	}
 VarDeclTail			id	}
-VarDeclorAssignStat			id, [, =	}
+VarDeclorAssignStat			id, ., [, =	}
 VarDecl			id, float, int	id, float, int
 Statements	Nullable		id, if, for, get, put, return	}
 ArraySizes	Nullable		[	;, ), ,
@@ -19,17 +19,17 @@ Statement			id, if, for, get, put, return	id, }, ;, if, else, for, get, put, ret
 StatmentSpecial			if, for, get, put, return	id, }, ;, if, else, for, get, put, return
 AssignStat			id	;, )
 StatBlock	Nullable		id, {, if, for, get, put, return	;, else
-Expr			id, (, +, -, floatNumber, integerNumber, not	;, ), ,
+Expr			id, (, +, -, integerNumber, floatNumber, not	;, ), ,
 RelExprTail	Nullable		==, <>, <, >, <=, >=	;, ), ,
-RelExpr			id, (, +, -, floatNumber, integerNumber, not	;
-ArithExpr			id, (, +, -, floatNumber, integerNumber, not	;, ), ], ,, ==, <>, <, >, <=, >=
+RelExpr			id, (, +, -, integerNumber, floatNumber, not	;
+ArithExpr			id, (, +, -, integerNumber, floatNumber, not	;, ), ], ,, ==, <>, <, >, <=, >=
 ArithExprDs	Nullable		+, -, or	;, ), ], ,, ==, <>, <, >, <=, >=
 ArithExprD			+, -, or	;, ), +, -, ], ,, ==, <>, <, >, <=, >=, or
-Sign			+, -	id, (, +, -, floatNumber, integerNumber, not
-Term			id, (, +, -, floatNumber, integerNumber, not	;, ), +, -, ], ,, ==, <>, <, >, <=, >=, or
+Sign			+, -	id, (, +, -, integerNumber, floatNumber, not
+Term			id, (, +, -, integerNumber, floatNumber, not	;, ), +, -, ], ,, ==, <>, <, >, <=, >=, or
 TermDs	Nullable		*, /, and	;, ), +, -, ], ,, ==, <>, <, >, <=, >=, or
 TermD			*, /, and	;, ), +, -, ], ,, ==, <>, <, >, <=, >=, or, *, /, and
-Factor			id, (, +, -, floatNumber, integerNumber, not	;, ), +, -, ], ,, ==, <>, <, >, <=, >=, or, *, /, and
+Factor			id, (, +, -, integerNumber, floatNumber, not	;, ), +, -, ], ,, ==, <>, <, >, <=, >=, or, *, /, and
 VarHead			id	;, ), +, -, ], ,, ==, <>, <, >, <=, >=, or, *, /, and
 VarHeadTail	Nullable		(, ., [	;, ), +, -, ], ,, ==, <>, <, >, <=, >=, or, *, /, and
 VarHeadEnd	Nullable		.	;, ), +, -, ], ,, ==, <>, <, >, <=, >=, or, *, /, and
@@ -43,11 +43,11 @@ ArraySize			[	;, ), [, ,
 Type			id, float, int	id
 FParams	Nullable		id, float, int	)
 FParamsTails	Nullable		,	)
-AParams	Nullable		id, (, +, -, floatNumber, integerNumber, not	)
+AParams	Nullable		id, (, +, -, integerNumber, floatNumber, not	)
 AParamsTails	Nullable		,	)
 FParamsTail			,	), ,
 AParamsTail			,	), ,
-AssignOp			=	id, (, +, -, floatNumber, integerNumber, not
-RelOp			==, <>, <, >, <=, >=	id, (, +, -, floatNumber, integerNumber, not
-AddOp			+, -, or	id, (, +, -, floatNumber, integerNumber, not
-MultOp			*, /, and	id, (, +, -, floatNumber, integerNumber, not
+AssignOp			=	id, (, +, -, integerNumber, floatNumber, not
+RelOp			==, <>, <, >, <=, >=	id, (, +, -, integerNumber, floatNumber, not
+AddOp			+, -, or	id, (, +, -, integerNumber, floatNumber, not
+MultOp			*, /, and	id, (, +, -, integerNumber, floatNumber, not

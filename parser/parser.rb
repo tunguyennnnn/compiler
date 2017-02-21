@@ -1,71 +1,5 @@
 require_relative '../lexical_analyzer/main.rb'
-
-class FirstFollowSetTable
-  attr_reader :table
-  def initialize
-    @table = {}
-  end
-
-  def insert_from_file(file_name)
-    file = File.open(file_name, "r")
-    line = ""
-    while line = file.gets do
-      nullable = false
-      partitions = line.split(/\s+/)
-      key = partitions[0]
-      first_set, follow_set = [], []
-      current_set = first_set
-      partitions[1..-1].each do |word|
-        if word == ","
-          current_set.push(",")
-          current_set = follow_set
-        elsif word == "Nullable"
-          nullable = true
-        elsif word.include? ','
-          current_set.push(word.gsub(',', ''))
-        else
-          current_set.push(word)
-          current_set = follow_set
-        end
-      end
-      @table[key] = FirstFollowSet.new(first_set, follow_set, nullable)
-    end
-  end
-end
-
-class FirstFollowSet
-  attr_reader :first_set, :follow_set, :nullable
-
-  def initialize(first_set, follow_set, nullable)
-    @first_set = first_set
-    @follow_set = follow_set
-    @nullable = nullable
-  end
-
-  def first_set_include? token
-    if token.kind_of? IntegerToken
-      @first_set.include? "integerNumber"
-    elsif token.kind_of? FloatToken
-      @first_set.include? "floatNumber"
-    elsif token.kind_of? IdToken
-      @first_set.include? "id"
-    else
-      @first_set.include? token.val.downcase
-    end
-  end
-
-  def follow_set_include? token
-    if token.kind_of? IntegerToken
-      @follow_set.include? "integerNumber"
-    elsif token.kind_of? FloatToken
-      @follow_set.include? "floatNumber"
-    elsif token.kind_of? IdToken
-      @follow_set.include? "id"
-    else
-      @follow_set.include? token.val.downcase
-    end
-  end
-end
+require_relative 'first_follow_set_table'
 
 class String
   def val
@@ -75,12 +9,14 @@ end
 
 class Parsing
   attr_reader :tokens, :look_ahead, :stack
-  def initialize(tokens, set_table)
+  def initialize(tokens, set_table, skip_error=false)
     @tokens = tokens
+    @skip_error = skip_error
     @tokens.push("$")
     @set_table = set_table
     @index = 0
     @stack = []
+    @errors = ""
   end
 
   def parse
@@ -88,6 +24,29 @@ class Parsing
     if @set_table["Prog"].first_set_include? @look_ahead
       return prog() && match("$")
     end
+  end
+
+  def skip_errors(set_table)
+    if @skip_error
+      if set_table.first_set_include? @look_ahead or set_table.nullable and set_table.follow_set_include? @look_ahead
+        return true
+      else
+        write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+        until set_table.first_set_include? @look_ahead or set_table.follow_set_include? @look_ahead
+          next_token()
+          if set_table.nullable and set_table.follow_set_include? @look_ahead
+            return false
+          end
+        end
+        return true
+      end
+    else
+      return true
+    end
+  end
+
+  def write_error(error)
+    @errors += "#{error}\n"
   end
 
   def match(token)
@@ -105,17 +64,28 @@ class Parsing
     return true
   end
 
+  def write_to_file
+    File.open('derivation.txt', 'w+') do |file|
+      @stack.reverse.each do |derivation|
+        lsh, *rhs = derivation
+        file.write "#{lsh} => #{rhs.join("  ")}\n"
+      end
+    end
+    File.open('error.txt', 'w+') do |file|
+      file.write @errors
+    end
+  end
+
   def look_ahead_is (token)
     if @look_ahead.kind_of? IdToken
       token == "id"
     elsif @look_ahead.kind_of? IntegerToken
-      token == "integer" || token == "num"
+      token == "integerNumber"
     elsif @look_ahead.kind_of? FloatToken
-      token == "num"
+      token == "floatNumber"
     else
       @look_ahead.val.downcase == token
     end
-
   end
 
   def next_token
@@ -270,7 +240,7 @@ class Parsing
         write "VarDeclorAssignStat", "idToken", "ArraySizes", ";", "FuncBodyInner"
       end
     elsif @set_table["Indices"].first_set_include? @look_ahead
-      if indices() && variableTail() && assignOp() && expr() && match(";")  && statement_star()
+      if indice_star() && variableTail() && assignOp() && expr() && match(";")  && statement_star()
         write "VarDeclorAssignStat", "Indices", "VariableTail", "AssignOp", "Expr", ";", "Statements"
       end
     elsif @set_table["AssignOp"].first_set_include? @look_ahead
@@ -291,10 +261,10 @@ class Parsing
   def statement_star
     if @set_table["Statement"].first_set_include? @look_ahead
       if statement() && statement_star()
-        write "Statements", "Statement", "Statments"
+        write "Statements", "Statement", "Statements"
       end
     elsif @set_table["Statements"].follow_set_include? @look_ahead
-      write "Statments", "epsilon"
+      write "Statements", "epsilon"
     end
   end
 
@@ -311,11 +281,11 @@ class Parsing
   def statement
     if @set_table["AssignStat"].first_set_include? @look_ahead
       if assignStat() && match(";")
-        write "Statment", "AssignStat", ";"
+        write "Statement", "AssignStat", ";"
       end
     elsif @set_table["StatmentSpecial"].first_set_include? @look_ahead
       if statementSpecial()
-        write "Statment", "StatementSpecial"
+        write "Statement", "StatementSpecial"
       end
     end
   end
@@ -355,7 +325,7 @@ class Parsing
   def statBlock
     if look_ahead_is "{"
       if match("{") && statement_star() && match("}")
-        write "StatBlock", "{", "Statments", "}"
+        write "StatBlock", "{", "Statements", "}"
       end
     elsif @set_table["Statement"].first_set_include? @look_ahead
       if statement()
@@ -450,9 +420,13 @@ class Parsing
       if varHead()
         write "Factor", "VarHead"
       end
-    elsif look_ahead_is "num"
-      if match("num")
-        write "Factor", "num"
+    elsif look_ahead_is "integerNumber"
+      if match("integerNumber")
+        write "Factor", "integerNumber"
+      end
+    elsif look_ahead_is "floatNumber"
+      if match("floatNumber")
+        write "Factor", "floatNumber"
       end
     elsif look_ahead_is "("
       if match("(") && arithExpr() && match(")")
@@ -478,6 +452,7 @@ class Parsing
   end
 
   def varHeadTail
+
     if @set_table["Indices"].first_set_include? @look_ahead
       if indice_star() && varHeadEnd()
         write "VarHeadTail", "Indices", "VarHeadEnd"
@@ -552,15 +527,19 @@ class Parsing
 
   def arraySize
     if look_ahead_is "["
-      if match("[") && match("integer") && match("]")
+      if match("[") && match("integerNumber") && match("]")
         write "ArraySize", "[", "intToken", "]"
       end
     end
   end
 
   def type
-    if look_ahead_is "int" or look_ahead_is "float" or look_ahead_is "id"
+    if look_ahead_is "int" or look_ahead_is "float"
       if match(@look_ahead.val.downcase)
+        write "Type", @look_ahead.val.downcase
+      end
+    elsif look_ahead_is "id"
+      if match("id")
         write "Type", @look_ahead.val.downcase
       end
     end
@@ -618,6 +597,7 @@ class Parsing
     if look_ahead_is ","
       if match(",") && expr()
         write "aParamsTail", ",", "Expr"
+      end
     end
   end
 
@@ -626,7 +606,7 @@ class Parsing
   end
 
   def relOp
-    match(@look_ahead.val.downcase) if look_ahead_is "==" or look_ahead_is "<>" or look_ahead_is "<" or look_ahead_is ">" or look_ahead_is "<=" or look_ahead_is "=>"
+    match(@look_ahead.val.downcase) if look_ahead_is "==" or look_ahead_is "<>" or look_ahead_is "<" or look_ahead_is ">" or look_ahead_is "<=" or look_ahead_is ">="
   end
 
   def addOp
@@ -635,6 +615,14 @@ class Parsing
 
   def mulOp
     match(@look_ahead.val.downcase) if look_ahead_is "*" or look_ahead_is "/" or look_ahead_is "and"
+  end
+
+  def sign
+    if look_ahead_is "-" or look_ahead_is "+"
+      if match(@look_ahead.val.downcase)
+        write "Sign", @tokens[@index - 1].val
+      end
+    end
   end
 
   def id
@@ -649,79 +637,20 @@ class Parsing
 end
 
 
-#2: intersection type id of variable declaration and func declaration -> merge 2 things into one
-#3: program .... and function after man function ->
+set_table = FirstFollowSetTable.new
+set_table.insert_from_file 'set_table.txt'
+table = set_table.table
 
-#expr: -> dont allow 1 < 2 > 1
-#idnest:
-
-#indice: inside is an expression could be a.b.c.d.e
-
-
-a = FirstFollowSetTable.new
-a.insert_from_file 'set_table.txt'
-tokenizer = Tokenizer.new
-tokenizer.text =
-"class Utility
-{
-int var1[4][5][7][8][9][1][0];
-float var2;
-int findMax(int array[100])
-{
-int maxValue;
-int idx;
-maxValue = array[100];
-for( int idx = 99; idx > 0; idx = idx - 1 )
-{
-if(array[idx] > maxValue) then {
-maxValue = array[idx];
-}else{};
-};
-return (maxValue);
-};
-int findMin(int array[100])
-{
-int minValue;
-int idx;
-minValue = array[100];
-for( int idx = 1; idx <= 99; idx = ( idx ) + 1)
-{
-if(array[idx] < maxValue) then {
-maxValue = array[idx];
-}else{};
-};
-return (minValue);
-};
-};
-program {
-int sample[100];
-int idx;
-int maxValue;
-int minValue;
-Utility utility;
-Utility arrayUtility[2][3][6][7];
-for(int t = 0; t<=100 ; t = t + 1)
-{
-get(sample[t]);
-sample[t] = (sample[t] * randomize());
-};
-maxValue = utility.findMax(sample);
-minValue = utility.findMin(sample);
-utility. var1[4][1][0][0][0][0][0] = 10;
-arrayUtility[1][1][1][1].var1[4][1][0][0][0][0][0] = 2;
-put(maxValue);
-put(minValue);
-};
-float randomize()
-{
-float value;
-value = 100 * (2 + 3.0 / 7.0006);
-value = 1.05 + ((2.04 * 2.47) - 3.0) + 7.0006 ;
-return (value);
+@tokenizer = Tokenizer.new
+@tokenizer.text = "program{
+  X_type x[1][2][3];
+  x = y.func() and y.run();
+  x = x.run(a, b);
+  x = x.run(a + b, b and b[a] + 3 * (x + y[1][2]), 1, 2, 3.23);
 };"
-tokenizer.tokenize
-tokenizer.remove_error
+@tokenizer.tokenize
+@tokenizer.remove_error
+parser = Parsing.new(@tokenizer.tokens, table)
+puts parser.parse
 
-x = Parsing.new(tokenizer.tokens, a.table)
-puts x.parse
-puts x.stack
+parser.write_to_file
