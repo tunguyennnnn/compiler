@@ -28,16 +28,19 @@ class Parsing
 
   def skip_errors(set_table)
     if @skip_error
-      if set_table.first_set_include? @look_ahead or set_table.nullable and set_table.follow_set_include? @look_ahead
+      if set_table.first_set_include? @look_ahead or (set_table.nullable and set_table.follow_set_include? @look_ahead)
         return true
       else
-        write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+        puts "Reach"
+        puts @look_ahead.val
         until set_table.first_set_include? @look_ahead or set_table.follow_set_include? @look_ahead
-          next_token()
+          skip_token()
+          puts @look_ahead.val
           if set_table.nullable and set_table.follow_set_include? @look_ahead
             return false
           end
         end
+        puts "reach"
         return true
       end
     else
@@ -47,6 +50,7 @@ class Parsing
 
   def write_error(error)
     @errors += "#{error}\n"
+    nil
   end
 
   def match(token)
@@ -94,6 +98,13 @@ class Parsing
     @look_ahead = '$' unless @look_ahead
   end
 
+  def skip_token
+    write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+    @tokens.delete_at(@index)
+    @look_ahead = @tokens[@index]
+    @look_ahead = '$' unless @look_ahead
+  end
+
   def prog
     if @set_table["ClassDecs"].first_set_include? @look_ahead
       if classDecl_star() && progBody()
@@ -104,7 +115,7 @@ class Parsing
         write "Prog", "ProgBody"
       end
     else
-      false
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -115,6 +126,8 @@ class Parsing
       end
     elsif @set_table['ClassDecs'].follow_set_include? @look_ahead
       write "ClassDecls", "epsilon"
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -123,6 +136,8 @@ class Parsing
       if match("class") && match("id") && match("{") && classBody() && match("}") && match(";")
         write "ClassDecl", "class", "idToken", "{", "ClassBody", "}", ";"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -133,6 +148,8 @@ class Parsing
       end
     elsif @set_table["ClassBody"].follow_set_include? @look_ahead
       write "ClassBody", "epsilon"
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -149,6 +166,8 @@ class Parsing
       if match("(") && fParams() && match(")") && funcBody() && match(";") && funcDef_star()
         write "VarOrFuncDecl", "FParams", ")", "FuncBody", ";", "FuncDecls"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -159,6 +178,8 @@ class Parsing
       end
     elsif @set_table["VarDecls"].follow_set_include? @look_ahead
       write "VarDecls", "epsilon"
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -169,6 +190,8 @@ class Parsing
       end
     elsif @set_table["FuncDefs"].follow_set_include? @look_ahead
       write "FuncDecls", "epsilon"
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -177,6 +200,8 @@ class Parsing
       if match("program") && funcBody() && match(";") && funcDef_star()
         write "ProgBody", "program", "FuncBody", ";", "FuncDecls"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -185,6 +210,8 @@ class Parsing
       if type() && match("id") && match("(") && fParams() && match(")")
         write "FuncHead", "Type", "idToken", "(", "FParams", ")"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -193,6 +220,8 @@ class Parsing
       if funcHead() && funcBody() && match(";")
         write "FuncDecl", "FuncHead", "FuncBody", ";"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -201,6 +230,8 @@ class Parsing
       if match("{") && funcBodyInner() && match("}")
         write "FuncBody", "{", "FuncBodyInner", "}"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -223,6 +254,8 @@ class Parsing
       end
     elsif @set_table["FuncBodyInner"].follow_set_include? @look_ahead
       write "FuncBodyInner", "epsilon"
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -231,6 +264,8 @@ class Parsing
       if match("id") && arraySize_star() && match(";") && funcBodyInner()
         write "VarDeclTail", "idToken", "ArraySizes", ";", "FuncBodyInner"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -247,6 +282,8 @@ class Parsing
       if assignOp() && expr() && match(";") && statement_star()
         write "VarDeclorAssignStat", "AssignOp", "Expr", ";", "Statements"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -255,6 +292,8 @@ class Parsing
       if type() && match("id") && arraySize_star() && match(";")
         write "VarDecl", "Type", "idToken", "ArraySizes", ";"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -265,16 +304,21 @@ class Parsing
       end
     elsif @set_table["Statements"].follow_set_include? @look_ahead
       write "Statements", "epsilon"
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
   def arraySize_star
+    return false if (!skip_errors(@set_table["ArraySizes"]))
     if @set_table["ArraySize"].first_set_include? @look_ahead
       if arraySize() && arraySize_star()
         write "ArraySizes", "ArraySize", "ArraySizes"
       end
     elsif @set_table["ArraySizes"].follow_set_include? @look_ahead
       write "ArraySizes", "epsilon"
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -287,6 +331,8 @@ class Parsing
       if statementSpecial()
         write "Statement", "StatementSpecial"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -311,6 +357,8 @@ class Parsing
       if match("return") && match("(") && expr() && match(")") && match(";")
         write "StatementSpecial", "return", "(", "Expr", ")", ";"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -319,6 +367,8 @@ class Parsing
       if variable() && assignOp() && expr()
         write "AssignStat", "Variable", "AssignOp", "Expr"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -333,14 +383,19 @@ class Parsing
       end
     elsif @set_table["StatBlock"].follow_set_include? @look_ahead
       write "StatBlock", "epsilon"
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
   def expr
+    puts (!skip_errors(@set_table["Expr"]))
     if @set_table["ArithExpr"].first_set_include? @look_ahead
       if arithExpr() && relExprTail()
         write "Expr", "ArithExpr", "RelExprTail"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -351,6 +406,8 @@ class Parsing
       end
     elsif @set_table["RelExprTail"].follow_set_include? @look_ahead
       write "RelExprTail", "epsilon"
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -359,6 +416,8 @@ class Parsing
       if arithExpr() && relOp() && arithExpr()
         write "RelExpr", "ArithExpr", "RelOp", "ArithExpr"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -367,6 +426,8 @@ class Parsing
       if term() && arithExprD_star()
         write "ArithExpr", "Term", "ArithExprDs"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -377,6 +438,8 @@ class Parsing
       end
     elsif @set_table["ArithExprDs"].follow_set_include? @look_ahead
       write "ArithExprDs", "epsilon"
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -385,6 +448,8 @@ class Parsing
       if addOp() && term()
         write "ArithExprD", "AddOp", "Term"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -393,6 +458,8 @@ class Parsing
       if factor() && termD_star()
         write "Term", "Factor", "TermDs"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
 
   end
@@ -404,6 +471,8 @@ class Parsing
       end
     elsif @set_table["TermDs"].follow_set_include? @look_ahead
       write "TermDs", "epsilon"
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -412,6 +481,8 @@ class Parsing
       if mulOp() && factor()
         write "TermD", "MulOp", "Factor"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -440,6 +511,8 @@ class Parsing
       if sign() && factor()
         write "Factor", "Sign", "Factor"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -448,6 +521,8 @@ class Parsing
       if match("id") && varHeadTail()
         write "VarHead", "id", "VarHeadTail"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -467,6 +542,8 @@ class Parsing
       end
     elsif @set_table["VarHeadTail"].follow_set_include? @look_ahead
       write "VarHeadTail", "epsilon"
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -477,6 +554,8 @@ class Parsing
       end
     elsif @set_table["Indices"].follow_set_include? @look_ahead
       write "Indices", "epsilon"
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -487,6 +566,8 @@ class Parsing
       end
     elsif @set_table["VarHeadEnd"].follow_set_include? @look_ahead
       write "VarHeadEnd", "epsilon"
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -496,6 +577,8 @@ class Parsing
       if match("id") && indice_star && match(".")
         write "Idnest", "idToken", "Indices", "."
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -504,6 +587,8 @@ class Parsing
       if match("id") && indice_star() && variableTail()
         write "Variable", "idToken", "Indices", "VariableTail"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -514,6 +599,8 @@ class Parsing
       end
     elsif @set_table["VariableTail"].follow_set_include? @look_ahead
       write "VariableTail", "epsilon"
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -522,14 +609,19 @@ class Parsing
       if match("[") && arithExpr() && match("]")
         write "Indice", "[", "ArithExpr", "]"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
   def arraySize
+    puts (!skip_errors(@set_table["ArraySize"]))
     if look_ahead_is "["
       if match("[") && match("integerNumber") && match("]")
         write "ArraySize", "[", "intToken", "]"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -542,6 +634,8 @@ class Parsing
       if match("id")
         write "Type", @look_ahead.val.downcase
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -552,6 +646,8 @@ class Parsing
       end
     elsif @set_table["FParams"].follow_set_include? @look_ahead
       write "FParams", "epsilon"
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -562,6 +658,8 @@ class Parsing
       end
     elsif @set_table["FParamsTails"].follow_set_include? @look_ahead
       write "FParamsTails", "epsilon"
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -572,6 +670,8 @@ class Parsing
       end
     elsif @set_table["AParams"].follow_set_include? @look_ahead
       write "AParams", "epsilon"
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -582,39 +682,57 @@ class Parsing
       end
     elsif @set_table["AParamsTails"].follow_set_include? @look_ahead
       write "AParamsTails", "epsilon"
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
   def fParamsTail
     if look_ahead_is ","
+      if @tokens[@index + 1].val.downcase == ")"
+        skip_token()
+        return true
+      end
       if match(",") && type() && match("id") && arraySize_star()
         write "FParamsTail", ",", "Type", "id", "ArraySizes"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
   def aParamsTail
     if look_ahead_is ","
+      if @tokens[@index + 1].val.downcase == ")"
+        skip_token()
+        return true
+      end
       if match(",") && expr()
         write "aParamsTail", ",", "Expr"
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
   def assignOp
-    match(@look_ahead.val.downcase) if look_ahead_is "="
+    return match(@look_ahead.val.downcase) if look_ahead_is "="
+    write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
   end
 
   def relOp
-    match(@look_ahead.val.downcase) if look_ahead_is "==" or look_ahead_is "<>" or look_ahead_is "<" or look_ahead_is ">" or look_ahead_is "<=" or look_ahead_is ">="
+    return match(@look_ahead.val.downcase) if look_ahead_is "==" or look_ahead_is "<>" or look_ahead_is "<" or look_ahead_is ">" or look_ahead_is "<=" or look_ahead_is ">="
+    write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
   end
 
   def addOp
-    match(@look_ahead.val.downcase) if look_ahead_is "+" or look_ahead_is "-" or look_ahead_is "or"
+    return match(@look_ahead.val.downcase) if look_ahead_is "+" or look_ahead_is "-" or look_ahead_is "or"
+    write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
   end
 
   def mulOp
-    match(@look_ahead.val.downcase) if look_ahead_is "*" or look_ahead_is "/" or look_ahead_is "and"
+    return match(@look_ahead.val.downcase) if look_ahead_is "*" or look_ahead_is "/" or look_ahead_is "and"
+    write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
   end
 
   def sign
@@ -622,6 +740,8 @@ class Parsing
       if match(@look_ahead.val.downcase)
         write "Sign", @tokens[@index - 1].val
       end
+    else
+      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -643,14 +763,13 @@ table = set_table.table
 
 @tokenizer = Tokenizer.new
 @tokenizer.text = "program{
-  X_type x[1][2][3];
-  x = y.func() and y.run();
-  x = x.run(a, b);
-  x = x.run(a + b, b and b[a] + 3 * (x + y[1][2]), 1, 2, 3.23);
+  x = a(a,);
+};
+int f(int x, float y,){
+
 };"
 @tokenizer.tokenize
 @tokenizer.remove_error
-parser = Parsing.new(@tokenizer.tokens, table)
-puts parser.parse
-
+parser = Parsing.new(@tokenizer.tokens, table, true)
+puts "3dasda #{parser.parse}"
 parser.write_to_file

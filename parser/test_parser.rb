@@ -497,4 +497,59 @@ class TestParser < Minitest::Test
     assert_equal(true, parser.parse)
   end
 
+  #error recovery:
+  def test_recovery_array_size
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "program{
+      X_type x[1]2]2][3];
+    };
+    int randomize(X_type x[1]2][2], int y[2]){
+
+    };"
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table, true)
+    assert_equal(true, parser.parse)
+    parser.tokens.each do |token|
+      puts token.val
+    end
+    new_parser = Parsing.new(parser.tokens, @set_table)
+    assert_equal(true, new_parser.parse)
+  end
+
+  def test_func_call_recovery
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "program{
+      x = a(a, b,);
+      x = a(a + 2 and y,);
+    };"
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table, true)
+    assert_equal(true, parser.parse)
+
+    new_parser = Parsing.new(parser.tokens, @set_table)
+    assert_equal(true, new_parser.parse)
+  end
+
+  def test_funcdef_error_recovery
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "program{
+      x = a(a, b,);
+      x = a(a + 2 and y,);
+    };
+    int f(int x, float y,){
+
+    };
+    float func2(X_y time, ){
+
+    };"
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table, true)
+    assert_equal(true, parser.parse)
+
+    new_parser = Parsing.new(parser.tokens, @set_table)
+    assert_equal(true, new_parser.parse)
+  end
 end
