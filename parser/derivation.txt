@@ -1,43 +1,40 @@
-Prog => ProgBody
-ProgBody => program  FuncBody  ;  FuncDecls
-FuncDecls => FuncDecl  FuncDecls
-FuncDecls => epsilon
-FuncDecl => FuncHead  FuncBody  ;
-FuncBody => {  FuncBodyInner  }
-FuncBodyInner => epsilon
-FuncHead => Type  idToken  (  FParams  )
-FParams => Type  idToken  ArraySizes  FParamsTails
-FParamsTails => FParamsTail  FParamsTails
-FParamsTails => FParamsTail  FParamsTails
-FParamsTails => epsilon
-FParamsTail => ,  Type  id  ArraySizes
-ArraySizes => epsilon
-Type => y
-ArraySizes => epsilon
-Type => x
-Type => f
-FuncBody => {  FuncBodyInner  }
-FuncBodyInner => idToken  VarDeclorAssignStat
-VarDeclorAssignStat => AssignOp  Expr  ;  Statements
-Statements => epsilon
-Expr => ArithExpr  RelExprTail
-RelExprTail => epsilon
-ArithExpr => Term  ArithExprDs
-ArithExprDs => epsilon
-Term => Factor  TermDs
-TermDs => epsilon
-Factor => VarHead
-VarHead => id  VarHeadTail
-VarHeadTail => (  AParams  )
-AParams => Expr  AParamsTails
-AParamsTails => AParamsTail  AParamsTails
-AParamsTails => epsilon
-Expr => ArithExpr  RelExprTail
-RelExprTail => epsilon
-ArithExpr => Term  ArithExprDs
-ArithExprDs => epsilon
-Term => Factor  TermDs
-TermDs => epsilon
-Factor => VarHead
-VarHead => id  VarHeadTail
-VarHeadTail => epsilon
+ProgBody
+program FuncBody ; FuncDecls
+program FuncBody ; FuncDecl FuncDecls
+program FuncBody ; FuncDecl ε
+program FuncBody ; FuncHead FuncBody ; ε
+program FuncBody ; FuncHead { FuncBodyInner } ; ε
+program FuncBody ; FuncHead { ε } ; ε
+program FuncBody ; Type idToken ( FParams ) { ε } ; ε
+program FuncBody ; Type idToken ( Type idToken ArraySizes FParamsTails ) { ε } ; ε
+program FuncBody ; Type idToken ( Type idToken ArraySizes FParamsTail FParamsTails ) { ε } ; ε
+program FuncBody ; Type idToken ( Type idToken ArraySizes FParamsTail ε ) { ε } ; ε
+program FuncBody ; Type idToken ( Type idToken ArraySizes , Type id ArraySizes ε ) { ε } ; ε
+program FuncBody ; Type idToken ( Type idToken ArraySizes , Type id ε ε ) { ε } ; ε
+program FuncBody ; Type idToken ( Type idToken ArraySizes , float id ε ε ) { ε } ; ε
+program FuncBody ; Type idToken ( Type idToken ε , float id ε ε ) { ε } ; ε
+program FuncBody ; Type idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program FuncBody ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { FuncBodyInner } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { idToken VarDeclorAssignStat } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { idToken AssignOp Expr ; Statements } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { idToken AssignOp Expr ; ε } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { idToken AssignOp ArithExpr RelExprTail ; ε } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { idToken AssignOp ArithExpr ε ; ε } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { idToken AssignOp Term ArithExprDs ε ; ε } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { idToken AssignOp Term ε ε ; ε } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { idToken AssignOp Factor TermDs ε ε ; ε } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { idToken AssignOp Factor ε ε ε ; ε } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { idToken AssignOp VarHead ε ε ε ; ε } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { idToken AssignOp id VarHeadTail ε ε ε ; ε } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { idToken AssignOp id ( AParams ) ε ε ε ; ε } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { idToken AssignOp id ( Expr AParamsTails ) ε ε ε ; ε } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { idToken AssignOp id ( Expr ε ) ε ε ε ; ε } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { idToken AssignOp id ( ArithExpr RelExprTail ε ) ε ε ε ; ε } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { idToken AssignOp id ( ArithExpr ε ε ) ε ε ε ; ε } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { idToken AssignOp id ( Term ArithExprDs ε ε ) ε ε ε ; ε } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { idToken AssignOp id ( Term ε ε ε ) ε ε ε ; ε } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { idToken AssignOp id ( Factor TermDs ε ε ε ) ε ε ε ; ε } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { idToken AssignOp id ( Factor ε ε ε ε ) ε ε ε ; ε } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { idToken AssignOp id ( VarHead ε ε ε ε ) ε ε ε ; ε } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε
+program { idToken AssignOp id ( id VarHeadTail ε ε ε ε ) ε ε ε ; ε } ; int idToken ( int idToken ε , float id ε ε ) { ε } ; ε

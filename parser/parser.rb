@@ -7,6 +7,34 @@ class String
   end
 end
 
+class WriteToFile
+  attr_reader :write
+  def initialize(derivation_stack)
+    @derivation_stack = derivation_stack
+    @stack = []
+    @write = ""
+  end
+
+  def build_stack
+    if @stack.empty?
+      n, *t = @derivation_stack.first
+      @stack = t
+      @derivation_stack = @derivation_stack[1..-1]
+      build_stack
+    elsif @derivation_stack.empty?
+      #done
+    else
+      @write += @stack.join(" ") + "\n"
+      n, *t = @derivation_stack.first
+      indexes = @stack.each_index.select {|i| @stack[i] == n}
+      @stack[indexes.last] = t
+      @stack.flatten!
+      @derivation_stack = @derivation_stack[1..-1]
+      build_stack
+    end
+  end
+end
+
 class Parsing
   attr_reader :tokens, :look_ahead, :stack
   def initialize(tokens, set_table, skip_error=false)
@@ -70,10 +98,9 @@ class Parsing
 
   def write_to_file
     File.open('derivation.txt', 'w+') do |file|
-      @stack.reverse.each do |derivation|
-        lsh, *rhs = derivation
-        file.write "#{lsh} => #{rhs.join("  ")}\n"
-      end
+      writer = WriteToFile.new(@stack.reverse)
+      writer.build_stack
+      file.write(writer.write)
     end
     File.open('error.txt', 'w+') do |file|
       file.write @errors
@@ -125,7 +152,7 @@ class Parsing
         write "ClassDecls", "ClassDecl", "ClassDecls"
       end
     elsif @set_table['ClassDecs'].follow_set_include? @look_ahead
-      write "ClassDecls", "epsilon"
+      write "ClassDecls", "ε"
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
@@ -147,7 +174,7 @@ class Parsing
         write "ClassBody", "Type", "idToken", "VarOrFuncDecl"
       end
     elsif @set_table["ClassBody"].follow_set_include? @look_ahead
-      write "ClassBody", "epsilon"
+      write "ClassBody", "ε"
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
@@ -177,7 +204,7 @@ class Parsing
         write "VarDecls", "VarDecl" , "VarDecls"
       end
     elsif @set_table["VarDecls"].follow_set_include? @look_ahead
-      write "VarDecls", "epsilon"
+      write "VarDecls", "ε"
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
@@ -189,7 +216,7 @@ class Parsing
         write "FuncDecls", "FuncDecl", "FuncDecls"
       end
     elsif @set_table["FuncDefs"].follow_set_include? @look_ahead
-      write "FuncDecls", "epsilon"
+      write "FuncDecls", "ε"
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
@@ -253,7 +280,7 @@ class Parsing
         write "FuncBodyInner", "statementSpecial", "Statements"
       end
     elsif @set_table["FuncBodyInner"].follow_set_include? @look_ahead
-      write "FuncBodyInner", "epsilon"
+      write "FuncBodyInner", "ε"
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
@@ -303,7 +330,7 @@ class Parsing
         write "Statements", "Statement", "Statements"
       end
     elsif @set_table["Statements"].follow_set_include? @look_ahead
-      write "Statements", "epsilon"
+      write "Statements", "ε"
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
@@ -316,7 +343,7 @@ class Parsing
         write "ArraySizes", "ArraySize", "ArraySizes"
       end
     elsif @set_table["ArraySizes"].follow_set_include? @look_ahead
-      write "ArraySizes", "epsilon"
+      write "ArraySizes", "ε"
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
@@ -382,7 +409,7 @@ class Parsing
         write "StatBlock", "Statement"
       end
     elsif @set_table["StatBlock"].follow_set_include? @look_ahead
-      write "StatBlock", "epsilon"
+      write "StatBlock", "ε"
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
@@ -405,7 +432,7 @@ class Parsing
         write "RelExprTail", "RelOp", "ArithExpr"
       end
     elsif @set_table["RelExprTail"].follow_set_include? @look_ahead
-      write "RelExprTail", "epsilon"
+      write "RelExprTail", "ε"
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
@@ -437,7 +464,7 @@ class Parsing
         write "ArithExprDs", "ArithExprD", "ArithExprDs"
       end
     elsif @set_table["ArithExprDs"].follow_set_include? @look_ahead
-      write "ArithExprDs", "epsilon"
+      write "ArithExprDs", "ε"
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
@@ -470,7 +497,7 @@ class Parsing
         write "TermDs", "TermD", "TermDs"
       end
     elsif @set_table["TermDs"].follow_set_include? @look_ahead
-      write "TermDs", "epsilon"
+      write "TermDs", "ε"
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
@@ -541,7 +568,7 @@ class Parsing
         write "VarHeadTail", "(", "AParams", ")"
       end
     elsif @set_table["VarHeadTail"].follow_set_include? @look_ahead
-      write "VarHeadTail", "epsilon"
+      write "VarHeadTail", "ε"
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
@@ -553,7 +580,7 @@ class Parsing
         write "Indices", "Indice", "Indices"
       end
     elsif @set_table["Indices"].follow_set_include? @look_ahead
-      write "Indices", "epsilon"
+      write "Indices", "ε"
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
@@ -565,7 +592,7 @@ class Parsing
         write "VarHeadEnd", ".", "VarHead"
       end
     elsif @set_table["VarHeadEnd"].follow_set_include? @look_ahead
-      write "VarHeadEnd", "epsilon"
+      write "VarHeadEnd", "ε"
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
@@ -598,7 +625,7 @@ class Parsing
         write "VariableTail", ".", "Variable"
       end
     elsif @set_table["VariableTail"].follow_set_include? @look_ahead
-      write "VariableTail", "epsilon"
+      write "VariableTail", "ε"
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
@@ -628,11 +655,11 @@ class Parsing
   def type
     if look_ahead_is "int" or look_ahead_is "float"
       if match(@look_ahead.val.downcase)
-        write "Type", @look_ahead.val.downcase
+        write "Type", @tokens[@index - 1].val.downcase
       end
     elsif look_ahead_is "id"
       if match("id")
-        write "Type", @look_ahead.val.downcase
+        write "Type", @tokens[@index - 1].val.downcase
       end
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
@@ -645,7 +672,7 @@ class Parsing
         write "FParams", "Type", "idToken", "ArraySizes", "FParamsTails"
       end
     elsif @set_table["FParams"].follow_set_include? @look_ahead
-      write "FParams", "epsilon"
+      write "FParams", "ε"
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
@@ -657,7 +684,7 @@ class Parsing
         write "FParamsTails", "FParamsTail", "FParamsTails"
       end
     elsif @set_table["FParamsTails"].follow_set_include? @look_ahead
-      write "FParamsTails", "epsilon"
+      write "FParamsTails", "ε"
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
@@ -669,7 +696,7 @@ class Parsing
         write "AParams", "Expr", "AParamsTails"
       end
     elsif @set_table["AParams"].follow_set_include? @look_ahead
-      write "AParams", "epsilon"
+      write "AParams", "ε"
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
@@ -681,7 +708,7 @@ class Parsing
         write "AParamsTails", "AParamsTail", "AParamsTails"
       end
     elsif @set_table["AParamsTails"].follow_set_include? @look_ahead
-      write "AParamsTails", "epsilon"
+      write "AParamsTails", "ε"
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
@@ -757,15 +784,16 @@ class Parsing
 end
 
 
+
 set_table = FirstFollowSetTable.new
 set_table.insert_from_file 'set_table.txt'
 table = set_table.table
 
 @tokenizer = Tokenizer.new
 @tokenizer.text = "program{
-  x = a(a,);
+  x = a(a);
 };
-int f(int x, float y,){
+int f(int x, float y){
 
 };"
 @tokenizer.tokenize
