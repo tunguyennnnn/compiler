@@ -791,9 +791,10 @@ table = set_table.table
 
 @tokenizer = Tokenizer.new
 @tokenizer.text = "program{
-  x = a(a);
+  int x[3]2][3][4];
+  x = a(a,);
 };
-int f(int x, float y){
+int f(int x, float y,){
 
 };"
 @tokenizer.tokenize
