@@ -91,6 +91,7 @@ class Parsing
     end
   end
 
+
   def write(rhs, *lhs)
     @stack.push([rhs] + lhs)
     return true
@@ -277,7 +278,7 @@ class Parsing
       end
     elsif @set_table["StatmentSpecial"].first_set_include? @look_ahead
       if statementSpecial() && statement_star()
-        write "FuncBodyInner", "statementSpecial", "Statements"
+        write "FuncBodyInner", "StatementSpecial", "Statements"
       end
     elsif @set_table["FuncBodyInner"].follow_set_include? @look_ahead
       write "FuncBodyInner", "ε"
@@ -716,7 +717,7 @@ class Parsing
 
   def fParamsTail
     if look_ahead_is ","
-      if @tokens[@index + 1].val.downcase == ")"
+      if @skip_error && @tokens[@index + 1].val.downcase == ")"
         skip_token()
         return true
       end
@@ -730,7 +731,7 @@ class Parsing
 
   def aParamsTail
     if look_ahead_is ","
-      if @tokens[@index + 1].val.downcase == ")"
+      if @skip_error && @tokens[@index + 1].val.downcase == ")"
         skip_token()
         return true
       end
@@ -785,20 +786,20 @@ end
 
 
 
-set_table = FirstFollowSetTable.new
-set_table.insert_from_file 'set_table.txt'
-table = set_table.table
-
-@tokenizer = Tokenizer.new
-@tokenizer.text = "program{
-  int x[3]2][3][4];
-  x = a(a,);
-};
-int f(int x, float y,){
-
-};"
-@tokenizer.tokenize
-@tokenizer.remove_error
-parser = Parsing.new(@tokenizer.tokens, table, true)
-puts "3dasda #{parser.parse}"
-parser.write_to_file
+# set_table = FirstFollowSetTable.new
+# set_table.insert_from_file 'set_table.txt'
+# table = set_table.table
+#
+# @tokenizer = Tokenizer.new
+# @tokenizer.text = "program{
+#   int x[3]2][3][4];
+#   x = a(a+3,);
+# };
+# int f(int x, float y,){
+#
+# };"
+# @tokenizer.tokenize
+# @tokenizer.remove_error
+# parser = Parsing.new(@tokenizer.tokens, table, true)
+# puts "3dasda #{parser.parse}"
+# parser.write_to_file
