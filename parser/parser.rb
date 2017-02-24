@@ -1,9 +1,17 @@
-require_relative '../lexical_analyzer/main.rb'
+require_relative '../lexical_analyzer/tokenizer'
 require_relative 'first_follow_set_table'
 
 class String
   def val
     self
+  end
+
+  def start_index
+    "last"
+  end
+
+  def line
+    "last"
   end
 end
 
@@ -27,8 +35,10 @@ class WriteToFile
       @write += @stack.join(" ") + "\n"
       n, *t = @derivation_stack.first
       indexes = @stack.each_index.select {|i| @stack[i] == n}
-      @stack[indexes.last] = t
-      @stack.flatten!
+      unless indexes.empty?
+        @stack[indexes.last] = t
+        @stack.flatten!
+      end
       @derivation_stack = @derivation_stack[1..-1]
       build_stack
     end
@@ -59,16 +69,12 @@ class Parsing
       if set_table.first_set_include? @look_ahead or (set_table.nullable and set_table.follow_set_include? @look_ahead)
         return true
       else
-        puts "Reach"
-        puts @look_ahead.val
         until set_table.first_set_include? @look_ahead or set_table.follow_set_include? @look_ahead
           skip_token()
-          puts @look_ahead.val
           if set_table.nullable and set_table.follow_set_include? @look_ahead
             return false
           end
         end
-        puts "reach"
         return true
       end
     else
@@ -417,7 +423,7 @@ class Parsing
   end
 
   def expr
-    puts (!skip_errors(@set_table["Expr"]))
+    nil if (!skip_errors(@set_table["Expr"]))
     if @set_table["ArithExpr"].first_set_include? @look_ahead
       if arithExpr() && relExprTail()
         write "Expr", "ArithExpr", "RelExprTail"
@@ -643,7 +649,7 @@ class Parsing
   end
 
   def arraySize
-    puts (!skip_errors(@set_table["ArraySize"]))
+    nil if (!skip_errors(@set_table["ArraySize"]))
     if look_ahead_is "["
       if match("[") && match("integerNumber") && match("]")
         write "ArraySize", "[", "intToken", "]"
@@ -783,23 +789,3 @@ class Parsing
   end
 
 end
-
-
-
-# set_table = FirstFollowSetTable.new
-# set_table.insert_from_file 'set_table.txt'
-# table = set_table.table
-#
-# @tokenizer = Tokenizer.new
-# @tokenizer.text = "program{
-#   int x[3]2][3][4];
-#   x = a(a+3,);
-# };
-# int f(int x, float y,){
-#
-# };"
-# @tokenizer.tokenize
-# @tokenizer.remove_error
-# parser = Parsing.new(@tokenizer.tokens, table, true)
-# puts "3dasda #{parser.parse}"
-# parser.write_to_file

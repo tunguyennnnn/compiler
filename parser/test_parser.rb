@@ -510,9 +510,7 @@ class TestParser < Minitest::Test
     @tokenizer.remove_error
     parser = Parsing.new(@tokenizer.tokens, @set_table, true)
     assert_equal(true, parser.parse)
-    parser.tokens.each do |token|
-      puts token.val
-    end
+
     new_parser = Parsing.new(parser.tokens, @set_table)
     assert_equal(true, new_parser.parse)
   end
@@ -529,9 +527,7 @@ class TestParser < Minitest::Test
     @tokenizer.remove_error
     parser = Parsing.new(@tokenizer.tokens, @set_table, true)
     assert_equal(true, parser.parse)
-    parser.tokens.each do |token|
-      puts token.val
-    end
+  
     new_parser = Parsing.new(parser.tokens, @set_table)
     assert_equal(true, new_parser.parse)
   end

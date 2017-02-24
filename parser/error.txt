@@ -1,4 +1,0 @@
-Error occurs at line: 2 index: 9 token: 2
-Error occurs at line: 2 index: 9 token: ]
-Error occurs at line: 3 index: 10 token: ,
-Error occurs at line: 5 index: 20 token: ,
