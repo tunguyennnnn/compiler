@@ -1,5 +1,7 @@
 require_relative '../lexical_analyzer/tokenizer'
 require_relative 'first_follow_set_table'
+require_relative 'semantic_table'
+require 'terminal-table'
 
 class String
   def val
@@ -46,7 +48,7 @@ class WriteToFile
 end
 
 class Parsing
-  attr_reader :tokens, :look_ahead, :stack
+  attr_reader :tokens, :look_ahead, :stack, :global_table, :current_symbol_table
   def initialize(tokens, set_table, skip_error=false)
     @tokens = tokens
     @skip_error = skip_error
@@ -58,9 +60,10 @@ class Parsing
   end
 
   def parse
+    @global_table = SymbolTable.new('global')
     @look_ahead = @tokens[@index]
     if @set_table["Prog"].first_set_include? @look_ahead
-      return prog() && match("$")
+      return prog() && (match("$") == '$')
     end
   end
 
@@ -88,9 +91,9 @@ class Parsing
   end
 
   def match(token)
-    if look_ahead_is token
+    if current_token = look_ahead_is(token)
       next_token()
-      true
+      current_token
     else
       next_token()
       false
@@ -116,13 +119,13 @@ class Parsing
 
   def look_ahead_is (token)
     if @look_ahead.kind_of? IdToken
-      token == "id"
+      return @look_ahead.val if token == 'id'
     elsif @look_ahead.kind_of? IntegerToken
-      token == "integerNumber"
+      return @look_ahead.val.to_i if token == "integerNumber"
     elsif @look_ahead.kind_of? FloatToken
-      token == "floatNumber"
+      return @look_ahead.val.to_f if token == "floatNumber"
     else
-      @look_ahead.val.downcase == token
+      return @look_ahead.val if @look_ahead.val.downcase == token
     end
   end
 
@@ -167,8 +170,16 @@ class Parsing
 
   def classDecl
     if look_ahead_is "class"
-      if match("class") && match("id") && match("{") && classBody() && match("}") && match(";")
-        write "ClassDecl", "class", "idToken", "{", "ClassBody", "}", ";"
+      if match("class") && (id=match("id"))
+        row = TableRow.new('class', '')
+        is_added, added =  @global_table.add_symbol(id, row)
+        row.link = @current_symbol_table = SymbolTable.new('class', @global_table)
+        if match("{") && classBody() && match("}") && match(";")
+          write "ClassDecl", "class", "idToken", "{", "ClassBody", "}", ";"
+          return true
+        else
+          return false
+        end
       end
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
@@ -177,7 +188,7 @@ class Parsing
 
   def classBody
     if @set_table["Type"].first_set_include? @look_ahead
-      if type() && match("id") && varOrFuncDecl()
+      if (the_type=type()) && (id=match("id")) && varOrFuncDecl(id, the_type)
         write "ClassBody", "Type", "idToken", "VarOrFuncDecl"
       end
     elsif @set_table["ClassBody"].follow_set_include? @look_ahead
@@ -187,18 +198,35 @@ class Parsing
     end
   end
 
-  def varOrFuncDecl
+  def varOrFuncDecl(id, the_type)
     if @set_table["ArraySizes"].first_set_include? @look_ahead
-      if arraySize_star() && match(";") && classBody()
-        write "VarOrFuncDecl", "ArraySizes()", ";", "ClassBody"
+      if (the_size= arraySize_star()) && match(";")
+        is_added, added=@current_symbol_table.add_symbol(id,TableRow.new('variable', [the_type, the_size]))
+        if classBody()
+          write "VarOrFuncDecl", "ArraySizes()", ";", "ClassBody"
+        end
       end
     elsif look_ahead_is ";"
-      if match(";") && classBody()
-        write "VarOrFuncDecl", ";", "ClassBody"
+      if match(";")
+        is_added, added=@current_symbol_table.add_symbol(id,TableRow.new('variable', [the_type, []]))
+        if classBody()
+          write "VarOrFuncDecl", ";", "ClassBody"
+        end
       end
     elsif look_ahead_is "("
-      if match("(") && fParams() && match(")") && funcBody() && match(";") && funcDef_star()
-        write "VarOrFuncDecl", "FParams", ")", "FuncBody", ";", "FuncDecls"
+      if match("(") && (params=fParams()) && match(")")
+        params_type = params.map{|param| param["type"]}
+        row = TableRow.new('function', [the_type, params_type])
+        is_added, added = @current_symbol_table.add_symbol(id, row)
+        @current_symbol_table = SymbolTable.new('function', @current_symbol_table)
+        params.each{|param| @current_symbol_table.add_symbol(param["id"], TableRow.new('parameter', param["type"]))}
+        row.link = @current_symbol_table
+        if funcBody() && match(";")
+          @current_symbol_table = @current_symbol_table.parent
+          if funcDef_star()
+            write "VarOrFuncDecl", "FParams", ")", "FuncBody", ";", "FuncDecls"
+          end
+        end
       end
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
@@ -231,8 +259,22 @@ class Parsing
 
   def progBody
     if look_ahead_is "program"
-      if match("program") && funcBody() && match(";") && funcDef_star()
-        write "ProgBody", "program", "FuncBody", ";", "FuncDecls"
+      if match("program")
+        row = TableRow.new('function', '')
+        is_added, added = @global_table.add_symbol('program', row)
+        row.link = @current_symbol_table = SymbolTable.new('program', @global_table)
+        if funcBody() && match(";")
+          @current_symbol_table = @current_symbol_table.parent
+          if funcDef_star()
+            write "ProgBody", "program", "FuncBody", ";", "FuncDecls"
+            return true
+          else
+            return false
+          end
+          return true
+        else
+          return false
+        end
       end
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
@@ -241,8 +283,18 @@ class Parsing
 
   def funcHead
     if @set_table["Type"].first_set_include? @look_ahead
-      if type() && match("id") && match("(") && fParams() && match(")")
-        write "FuncHead", "Type", "idToken", "(", "FParams", ")"
+      if (type=type()) && (id=match("id"))
+        if match("(") && (params=fParams()) && match(")")
+          params_type= params.map{|param| param["type"]}
+          row = TableRow.new('function', [type, params_type])
+          is_added, added = @current_symbol_table.add_symbol(id, row)
+          row.link = @current_symbol_table = SymbolTable.new("function", @current_symbol_table)
+          params.each{|param| @current_symbol_table.add_symbol(param["id"], TableRow.new('parameter', param["type"]))}
+          write "FuncHead", "Type", "idToken", "(", "FParams", ")"
+          return params
+        else
+          return false
+        end
       end
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
@@ -251,7 +303,8 @@ class Parsing
 
   def funcDef
     if @set_table["FuncHead"].first_set_include? @look_ahead
-      if funcHead() && funcBody() && match(";")
+      if (params=funcHead()) && funcBody() && match(";")
+        @current_symbol_table = @current_symbol_table.parent
         write "FuncDecl", "FuncHead", "FuncBody", ";"
       end
     else
@@ -271,15 +324,15 @@ class Parsing
 
   def funcBodyInner
     if look_ahead_is "float"
-      if match("float") && varDeclTail()
+      if match("float") && varDeclTail("float")
         write "FuncBodyInner", "floatToken", "VarDeclTail"
       end
     elsif look_ahead_is "int"
-      if match("int") && varDeclTail()
+      if match("int") && varDeclTail("int")
         write "FuncBodyInner", "intToken", "VarDeclTail"
       end
     elsif look_ahead_is "id"
-      if match("id") && varDeclorAssignStat()
+      if (id=match("id")) && varDeclorAssignStat(id)
         write "FuncBodyInner", "idToken", "VarDeclorAssignStat"
       end
     elsif @set_table["StatmentSpecial"].first_set_include? @look_ahead
@@ -293,20 +346,28 @@ class Parsing
     end
   end
 
-  def varDeclTail
+  def varDeclTail(the_type)
     if look_ahead_is "id"
-      if match("id") && arraySize_star() && match(";") && funcBodyInner()
-        write "VarDeclTail", "idToken", "ArraySizes", ";", "FuncBodyInner"
+      if (id=match("id")) && (the_size=arraySize_star()) && match(";")
+        row = TableRow.new('variable', [the_type, the_size])
+        is_added, added = @current_symbol_table.add_symbol(id, row)
+        if funcBodyInner()
+          write "VarDeclTail", "idToken", "ArraySizes", ";", "FuncBodyInner"
+        end
       end
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
-  def varDeclorAssignStat
+  def varDeclorAssignStat(the_type)
     if look_ahead_is "id"
-      if match("id") && arraySize_star() && match(";") && funcBodyInner()
-        write "VarDeclorAssignStat", "idToken", "ArraySizes", ";", "FuncBodyInner"
+      if (id=match("id")) && (the_size=arraySize_star()) && match(";")
+        row = TableRow.new('variable', [the_type, the_size])
+        is_added, added = @current_symbol_table.add_symbol(id, row)
+        if funcBodyInner()
+          write "VarDeclorAssignStat", "idToken", "ArraySizes", ";", "FuncBodyInner"
+        end
       end
     elsif @set_table["Indices"].first_set_include? @look_ahead
       if indice_star() && variableTail() && assignOp() && expr() && match(";")  && statement_star()
@@ -323,7 +384,10 @@ class Parsing
 
   def varDecl
     if @set_table["type"].first_set_include? @look_ahead
-      if type() && match("id") && arraySize_star() && match(";")
+      current_row = TableRow.new('variable', '')
+      if (variable_type=type()) && (id=match("id")) && (size=arraySize_star()) && match(";")
+        current_row.type=[variable_type, size]
+        isAdded, added = @current_symbol_table.add_symbol(id, current_row)
         write "VarDecl", "Type", "idToken", "ArraySizes", ";"
       end
     else
@@ -343,14 +407,16 @@ class Parsing
     end
   end
 
-  def arraySize_star
+  def arraySize_star(ac_size=[])
     return false if (!skip_errors(@set_table["ArraySizes"]))
     if @set_table["ArraySize"].first_set_include? @look_ahead
-      if arraySize() && arraySize_star()
+      if (size = arraySize()) && arraySize_star(ac_size.push(size))
         write "ArraySizes", "ArraySize", "ArraySizes"
+        return ac_size
       end
     elsif @set_table["ArraySizes"].follow_set_include? @look_ahead
       write "ArraySizes", "ε"
+      return ac_size
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
@@ -651,8 +717,9 @@ class Parsing
   def arraySize
     nil if (!skip_errors(@set_table["ArraySize"]))
     if look_ahead_is "["
-      if match("[") && match("integerNumber") && match("]")
+      if match("[") && (int = match("integerNumber")) && match("]")
         write "ArraySize", "[", "intToken", "]"
+        return int
       end
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
@@ -661,12 +728,14 @@ class Parsing
 
   def type
     if look_ahead_is "int" or look_ahead_is "float"
-      if match(@look_ahead.val.downcase)
+      if (the_type = match(@look_ahead.val.downcase))
         write "Type", @tokens[@index - 1].val.downcase
+        return the_type
       end
     elsif look_ahead_is "id"
-      if match("id")
+      if (the_type = match("id"))
         write "Type", @tokens[@index - 1].val.downcase
+        return the_type
       end
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
@@ -675,23 +744,28 @@ class Parsing
 
   def fParams
     if @set_table["Type"].first_set_include? @look_ahead
-      if type() && match("id") && arraySize_star() && fParamsTail_star()
+      if (the_type=type()) && (id=match("id")) && (size=arraySize_star()) && (other_params=fParamsTail_star())
+        puts the_type
         write "FParams", "Type", "idToken", "ArraySizes", "FParamsTails"
+        return other_params.push({"id"=> id, "type"=> [the_type, size]})
       end
     elsif @set_table["FParams"].follow_set_include? @look_ahead
       write "FParams", "ε"
+      return []
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
-  def fParamsTail_star
+  def fParamsTail_star(params=[])
     if @set_table["FParamsTail"].first_set_include? @look_ahead
-      if fParamsTail() && fParamsTail_star()
+      if (param=fParamsTail()) && fParamsTail_star(params.push(param))
         write "FParamsTails", "FParamsTail", "FParamsTails"
+        return params
       end
     elsif @set_table["FParamsTails"].follow_set_include? @look_ahead
       write "FParamsTails", "ε"
+      return params
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
@@ -727,8 +801,9 @@ class Parsing
         skip_token()
         return true
       end
-      if match(",") && type() && match("id") && arraySize_star()
+      if match(",") && (the_type=type()) && (id=match("id")) && (the_size=arraySize_star())
         write "FParamsTail", ",", "Type", "id", "ArraySizes"
+        return {"id"=> id, "type"=> [type, the_size]}
       end
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
@@ -789,3 +864,51 @@ class Parsing
   end
 
 end
+
+set_table = FirstFollowSetTable.new
+set_table.insert_from_file 'set_table.txt'
+@set_table = set_table.table
+
+@tokenizer = Tokenizer.new
+@tokenizer.text = "
+class X{
+  int x;
+  SomeType f(int x){
+    sometype y[1][2];
+  };
+};
+program{
+  int x1;
+  SomeType x2[1][2][4];
+  x1 = 10;
+  put (x[1][2].y[1][2]);
+
+  if (x == 3) then
+    x = y.x[1];
+  else
+    x = 5;
+    ;
+  return (x.y);
+};
+int f(int x){
+  float y[1][2][10];
+
+};"
+@tokenizer.tokenize
+@tokenizer.remove_error
+parser = Parsing.new(@tokenizer.tokens, @set_table)
+puts "result is: #{parser.parse} done"
+
+
+def construct_table(table)
+  if table
+    rows = []
+    table.keys.each do |entry|
+      row = table[entry]
+      rows << [entry, row.kind, row.type, construct_table(row.link)]
+    end
+    return Terminal::Table.new rows: rows
+  end
+end
+
+print construct_table(parser.global_table)
