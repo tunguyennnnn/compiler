@@ -1,0 +1,5 @@
+Semantic errors are: 
+Reference itself
++---+----------+-----------+--+
+| x | variable | ["X", []] |  |
++---+----------+-----------+--+

@@ -2,6 +2,7 @@ require_relative '../lexical_analyzer/tokenizer'
 require_relative 'first_follow_set_table'
 require_relative 'semantic_table'
 require 'terminal-table'
+require 'continuation'
 
 class String
   def val
@@ -57,10 +58,12 @@ class Parsing
     @index = 0
     @stack = []
     @errors = ""
+    @correct_semantic = true
+    File.open("semantic_error.txt", 'w') {|f| f.write("Semantic errors are: \n") }
   end
 
   def parse
-    @global_table = SymbolTable.new('global')
+    @current_symbol_table = @global_table = SymbolTable.new(id, 'global', nil)
     @look_ahead = @tokens[@index]
     if @set_table["Prog"].first_set_include? @look_ahead
       return prog() && (match("$") == '$')
@@ -89,6 +92,79 @@ class Parsing
     @errors += "#{error}\n"
     nil
   end
+
+  def write_semantic_error(message, table)
+    @correct_semantic = false
+    open('semantic_error.txt', 'a'){ |file|
+      file.puts message
+      file.puts table
+    }
+  end
+
+  def check_semantic_table()
+    classes = {}
+    @global_table.each do |key, value|
+      if value.kind == 'class'
+        classes[key] = value
+      end
+    end
+    correct_semantic?(@global_table, classes)
+  end
+
+  def correct_semantic?(table, classes)
+    callcc{ |cont|
+      if table.nil?
+        return true
+      end
+      table.keys.each do |entry|
+        row = table[entry]
+        if ['variable', 'parameter'].include? row.kind
+          unless ['int', 'float'].include? row.type[0]
+            if !classes.keys.include? row.type[0]
+              write_semantic_error("Type #{row.type[0]} is undefined", construct_table(table, false))
+              cont.call()
+            end
+            if table.type == 'class'
+              if classes[row.type[0]].reference_classes.include?(table.id)
+                write_semantic_error("Circular Class References", "#{construct_table(table, false)} \n #{construct_table(classes[row.type[0]].link, false)}")
+                cont.call()
+              elsif table.id == row.type[0]
+                write_semantic_error("Reference itself", construct_table(table, false))
+                cont.call()
+              else
+                classes[table.id].add_reference(row.type[0])
+              end
+            end
+          end
+        else
+          correct_semantic?(row.link, classes)
+        end
+      end
+    }
+  end
+
+  def add_to_table(table, symbol, row)
+    is_added, added = table.add_symbol(symbol, row)
+    if is_added
+      return true
+    else
+      print_table = construct_table(table, false)
+      message = "The #{row.kind} #{symbol} cannot be added because #{added.kind} #{symbol} was added before."
+      write_semantic_error message, print_table
+    end
+  end
+
+  def construct_table(table, expand=true)
+    if table
+      rows = []
+      table.keys.each do |entry|
+        row = table[entry]
+        rows << [entry, row.kind, row.type, (expand ? construct_table(row.link) : row.link)]
+      end
+      return Terminal::Table.new rows: rows
+    end
+  end
+
 
   def match(token)
     if current_token = look_ahead_is(token)
@@ -171,9 +247,10 @@ class Parsing
   def classDecl
     if look_ahead_is "class"
       if match("class") && (id=match("id"))
-        row = TableRow.new('class', '')
-        is_added, added =  @global_table.add_symbol(id, row)
-        row.link = @current_symbol_table = SymbolTable.new('class', @global_table)
+        row = ClassRow.new(@global_table, 'class', '')
+        if add_to_table(@global_table, id, row)
+          row.link = @current_symbol_table = SymbolTable.new(id, 'class', row)
+        end
         if match("{") && classBody() && match("}") && match(";")
           write "ClassDecl", "class", "idToken", "{", "ClassBody", "}", ";"
           return true
@@ -201,14 +278,18 @@ class Parsing
   def varOrFuncDecl(id, the_type)
     if @set_table["ArraySizes"].first_set_include? @look_ahead
       if (the_size= arraySize_star()) && match(";")
-        is_added, added=@current_symbol_table.add_symbol(id,TableRow.new('variable', [the_type, the_size]))
+        if add_to_table(@current_symbol_table, id, TableRow.new(@current_symbol_table, 'variable', [the_type, the_size]))
+          puts "Add Variable"
+        end
         if classBody()
           write "VarOrFuncDecl", "ArraySizes()", ";", "ClassBody"
         end
       end
     elsif look_ahead_is ";"
       if match(";")
-        is_added, added=@current_symbol_table.add_symbol(id,TableRow.new('variable', [the_type, []]))
+        if add_to_table(@current_symbol_table, id, TableRow.new(@current_symbol_table, 'variable', [the_type, []]))
+          puts "Add Variable"
+        end
         if classBody()
           write "VarOrFuncDecl", ";", "ClassBody"
         end
@@ -216,13 +297,13 @@ class Parsing
     elsif look_ahead_is "("
       if match("(") && (params=fParams()) && match(")")
         params_type = params.map{|param| param["type"]}
-        row = TableRow.new('function', [the_type, params_type])
-        is_added, added = @current_symbol_table.add_symbol(id, row)
-        @current_symbol_table = SymbolTable.new('function', @current_symbol_table)
-        params.each{|param| @current_symbol_table.add_symbol(param["id"], TableRow.new('parameter', param["type"]))}
-        row.link = @current_symbol_table
+        row = TableRow.new(@current_symbol_table, 'function', [the_type, params_type])
+        if add_to_table(@current_symbol_table, id, row)
+          row.link = @current_symbol_table = SymbolTable.new(id, 'function', row)
+          params.each{|param| @current_symbol_table.add_symbol(param["id"], TableRow.new(@current_symbol_table, 'parameter', param["type"]))}
+        end
         if funcBody() && match(";")
-          @current_symbol_table = @current_symbol_table.parent
+          @current_symbol_table = @current_symbol_table.parent ? @current_symbol_table.parent.table : @global_table
           if funcDef_star()
             write "VarOrFuncDecl", "FParams", ")", "FuncBody", ";", "FuncDecls"
           end
@@ -260,11 +341,12 @@ class Parsing
   def progBody
     if look_ahead_is "program"
       if match("program")
-        row = TableRow.new('function', '')
-        is_added, added = @global_table.add_symbol('program', row)
-        row.link = @current_symbol_table = SymbolTable.new('program', @global_table)
+        row = TableRow.new(@global_table, 'function', '')
+        if add_to_table(@global_table, 'program', row)
+          row.link = @current_symbol_table = SymbolTable.new(id, 'program', row)
+        end
         if funcBody() && match(";")
-          @current_symbol_table = @current_symbol_table.parent
+          @current_symbol_table = @current_symbol_table.parent ? @current_symbol_table.parent.table : @global_table
           if funcDef_star()
             write "ProgBody", "program", "FuncBody", ";", "FuncDecls"
             return true
@@ -286,10 +368,11 @@ class Parsing
       if (type=type()) && (id=match("id"))
         if match("(") && (params=fParams()) && match(")")
           params_type= params.map{|param| param["type"]}
-          row = TableRow.new('function', [type, params_type])
-          is_added, added = @current_symbol_table.add_symbol(id, row)
-          row.link = @current_symbol_table = SymbolTable.new("function", @current_symbol_table)
-          params.each{|param| @current_symbol_table.add_symbol(param["id"], TableRow.new('parameter', param["type"]))}
+          row = TableRow.new(@global_table, 'function', [type, params_type])
+          if add_to_table(@current_symbol_table, id, row)
+            row.link = @current_symbol_table = SymbolTable.new(id, "function", row)
+            params.each{|param| @current_symbol_table.add_symbol(param["id"], TableRow.new(@current_symbol_table, 'parameter', param["type"]))}
+          end
           write "FuncHead", "Type", "idToken", "(", "FParams", ")"
           return params
         else
@@ -304,7 +387,7 @@ class Parsing
   def funcDef
     if @set_table["FuncHead"].first_set_include? @look_ahead
       if (params=funcHead()) && funcBody() && match(";")
-        @current_symbol_table = @current_symbol_table.parent
+        @current_symbol_table = @current_symbol_table.parent ? @current_symbol_table.parent.table : @global_table
         write "FuncDecl", "FuncHead", "FuncBody", ";"
       end
     else
@@ -349,8 +432,10 @@ class Parsing
   def varDeclTail(the_type)
     if look_ahead_is "id"
       if (id=match("id")) && (the_size=arraySize_star()) && match(";")
-        row = TableRow.new('variable', [the_type, the_size])
-        is_added, added = @current_symbol_table.add_symbol(id, row)
+        row = TableRow.new(@current_symbol_table, 'variable', [the_type, the_size])
+        if add_to_table(@current_symbol_table, id, row)
+          puts "Added variable #{id}"
+        end
         if funcBodyInner()
           write "VarDeclTail", "idToken", "ArraySizes", ";", "FuncBodyInner"
         end
@@ -363,8 +448,10 @@ class Parsing
   def varDeclorAssignStat(the_type)
     if look_ahead_is "id"
       if (id=match("id")) && (the_size=arraySize_star()) && match(";")
-        row = TableRow.new('variable', [the_type, the_size])
-        is_added, added = @current_symbol_table.add_symbol(id, row)
+        row = TableRow.new(@current_symbol_table, 'variable', [the_type, the_size])
+        if add_to_table(@current_symbol_table, id, row)
+          puts "added variable #{id}"
+        end
         if funcBodyInner()
           write "VarDeclorAssignStat", "idToken", "ArraySizes", ";", "FuncBodyInner"
         end
@@ -384,7 +471,7 @@ class Parsing
 
   def varDecl
     if @set_table["type"].first_set_include? @look_ahead
-      current_row = TableRow.new('variable', '')
+      current_row = TableRow.new(@current_symbol_table, 'variable', '')
       if (variable_type=type()) && (id=match("id")) && (size=arraySize_star()) && match(";")
         current_row.type=[variable_type, size]
         isAdded, added = @current_symbol_table.add_symbol(id, current_row)
@@ -730,7 +817,7 @@ class Parsing
     if look_ahead_is "int" or look_ahead_is "float"
       if (the_type = match(@look_ahead.val.downcase))
         write "Type", @tokens[@index - 1].val.downcase
-        return the_type
+        return the_type.downcase
       end
     elsif look_ahead_is "id"
       if (the_type = match("id"))
@@ -745,7 +832,6 @@ class Parsing
   def fParams
     if @set_table["Type"].first_set_include? @look_ahead
       if (the_type=type()) && (id=match("id")) && (size=arraySize_star()) && (other_params=fParamsTail_star())
-        puts the_type
         write "FParams", "Type", "idToken", "ArraySizes", "FParamsTails"
         return other_params.push({"id"=> id, "type"=> [the_type, size]})
       end
@@ -872,14 +958,14 @@ set_table.insert_from_file 'set_table.txt'
 @tokenizer = Tokenizer.new
 @tokenizer.text = "
 class X{
-  int x;
-  SomeType f(int x){
-    sometype y[1][2];
-  };
+  X x;
+};
+class Y{
+  X y;
 };
 program{
   int x1;
-  SomeType x2[1][2][4];
+  int x2[1][2][4];
   x1 = 10;
   put (x[1][2].y[1][2]);
 
@@ -893,22 +979,12 @@ program{
 int f(int x){
   float y[1][2][10];
 
-};"
+};
+"
 @tokenizer.tokenize
 @tokenizer.remove_error
 parser = Parsing.new(@tokenizer.tokens, @set_table)
 puts "result is: #{parser.parse} done"
 
-
-def construct_table(table)
-  if table
-    rows = []
-    table.keys.each do |entry|
-      row = table[entry]
-      rows << [entry, row.kind, row.type, construct_table(row.link)]
-    end
-    return Terminal::Table.new rows: rows
-  end
-end
-
-print construct_table(parser.global_table)
+puts parser.construct_table(parser.global_table)
+puts "#{parser.check_semantic_table} dasda"
