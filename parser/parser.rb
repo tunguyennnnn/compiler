@@ -49,7 +49,7 @@ class WriteToFile
 end
 
 class Parsing
-  attr_reader :tokens, :look_ahead, :stack, :global_table, :current_symbol_table
+  attr_reader :tokens, :look_ahead, :stack, :global_table, :current_symbol_table, :correct_semantic
   def initialize(tokens, set_table, skip_error=false)
     @tokens = tokens
     @skip_error = skip_error
@@ -66,7 +66,10 @@ class Parsing
     @current_symbol_table = @global_table = SymbolTable.new(id, 'global', nil)
     @look_ahead = @tokens[@index]
     if @set_table["Prog"].first_set_include? @look_ahead
-      return prog() && (match("$") == '$')
+      if prog() && (match("$") == '$')
+        check_semantic_table
+        return true
+      end
     end
   end
 
@@ -134,6 +137,13 @@ class Parsing
               else
                 classes[table.id].add_reference(row.type[0])
               end
+            end
+          end
+        elsif row.kind == 'function' && entry != "program"
+          unless ['int', 'float'].include? row.type[0]
+            unless classes[row.type[0]]
+              write_semantic_error("Non type", construct_table(table, false))
+              cont.call()
             end
           end
         else
@@ -300,7 +310,7 @@ class Parsing
         row = TableRow.new(@current_symbol_table, 'function', [the_type, params_type])
         if add_to_table(@current_symbol_table, id, row)
           row.link = @current_symbol_table = SymbolTable.new(id, 'function', row)
-          params.each{|param| @current_symbol_table.add_symbol(param["id"], TableRow.new(@current_symbol_table, 'parameter', param["type"]))}
+          params.each{|param| add_to_table(@current_symbol_table, param["id"], TableRow.new(@current_symbol_table, 'parameter', param["type"]))}
         end
         if funcBody() && match(";")
           @current_symbol_table = @current_symbol_table.parent ? @current_symbol_table.parent.table : @global_table
@@ -371,7 +381,7 @@ class Parsing
           row = TableRow.new(@global_table, 'function', [type, params_type])
           if add_to_table(@current_symbol_table, id, row)
             row.link = @current_symbol_table = SymbolTable.new(id, "function", row)
-            params.each{|param| @current_symbol_table.add_symbol(param["id"], TableRow.new(@current_symbol_table, 'parameter', param["type"]))}
+            params.each{|param| add_to_table(@current_symbol_table, param["id"], TableRow.new(@current_symbol_table, 'parameter', param["type"]))}
           end
           write "FuncHead", "Type", "idToken", "(", "FParams", ")"
           return params
@@ -474,7 +484,7 @@ class Parsing
       current_row = TableRow.new(@current_symbol_table, 'variable', '')
       if (variable_type=type()) && (id=match("id")) && (size=arraySize_star()) && match(";")
         current_row.type=[variable_type, size]
-        isAdded, added = @current_symbol_table.add_symbol(id, current_row)
+        add_to_table(@current_symbol_table,id, current_row)
         write "VarDecl", "Type", "idToken", "ArraySizes", ";"
       end
     else
@@ -889,7 +899,7 @@ class Parsing
       end
       if match(",") && (the_type=type()) && (id=match("id")) && (the_size=arraySize_star())
         write "FParamsTail", ",", "Type", "id", "ArraySizes"
-        return {"id"=> id, "type"=> [type, the_size]}
+        return {"id"=> id, "type"=> [the_type, the_size]}
       end
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
@@ -957,28 +967,15 @@ set_table.insert_from_file 'set_table.txt'
 
 @tokenizer = Tokenizer.new
 @tokenizer.text = "
-class X{
-  X x;
-};
-class Y{
-  X y;
-};
 program{
-  int x1;
-  int x2[1][2][4];
-  x1 = 10;
-  put (x[1][2].y[1][2]);
-
-  if (x == 3) then
-    x = y.x[1];
-  else
-    x = 5;
-    ;
-  return (x.y);
+  int x;
+  float y;
 };
-int f(int x){
-  float y[1][2][10];
-
+float y(){
+  int x;
+};
+int f(int y[2][3], float y){
+  float z;
 };
 "
 @tokenizer.tokenize
@@ -987,4 +984,4 @@ parser = Parsing.new(@tokenizer.tokens, @set_table)
 puts "result is: #{parser.parse} done"
 
 puts parser.construct_table(parser.global_table)
-puts "#{parser.check_semantic_table} dasda"
+puts "Semantic result: #{parser.correct_semantic}"

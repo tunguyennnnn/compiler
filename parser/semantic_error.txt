@@ -1,5 +1,5 @@
 Semantic errors are: 
-Reference itself
-+---+----------+-----------+--+
-| x | variable | ["X", []] |  |
-+---+----------+-----------+--+
+The variable y cannot be added because parameter y was added before.
++---+-----------+--------------------+--+
+| y | parameter | ["SecondType", []] |  |
++---+-----------+--------------------+--+
