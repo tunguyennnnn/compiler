@@ -1,5 +1,6 @@
 Semantic errors are: 
-The variable y cannot be added because parameter y was added before.
-+---+-----------+--------------------+--+
-| y | parameter | ["SecondType", []] |  |
-+---+-----------+--------------------+--+
+Non type
++---+----------+--------------------+--+
+| x | variable | ["int", []]        |  |
+| f | function | ["SecondType", []] |  |
++---+----------+--------------------+--+

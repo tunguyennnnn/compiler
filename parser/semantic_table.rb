@@ -34,8 +34,9 @@ class SymbolTable < Hash
   end
 
   def add_symbol(symbol, val)
-    if self.has_key? symbol
-      return false, self[symbol]
+    key = self.keys.keep_if{|k| k.val == symbol.val}
+    if key.first
+      return false, self[key.first]
     else
       self[symbol] = val
       val.table = self

@@ -108,7 +108,7 @@ class Parsing
     classes = {}
     @global_table.each do |key, value|
       if value.kind == 'class'
-        classes[key] = value
+        classes[key.val] = value
       end
     end
     correct_semantic?(@global_table, classes)
@@ -123,28 +123,30 @@ class Parsing
         row = table[entry]
         if ['variable', 'parameter'].include? row.kind
           unless ['int', 'float'].include? row.type[0]
-            if !classes.keys.include? row.type[0]
-              write_semantic_error("Type #{row.type[0]} is undefined", construct_table(table, false))
+            if !classes.keys.include?(row.type[0])
+              write_semantic_error("Type #{row.type[0]} of #{row.kind} #{entry.val} at line:#{entry.line_info} index:#{entry.start_index} is undefined", construct_table(table, false))
               cont.call()
             end
             if table.type == 'class'
-              if classes[row.type[0]].reference_classes.include?(table.id)
-                write_semantic_error("Circular Class References", "#{construct_table(table, false)} \n #{construct_table(classes[row.type[0]].link, false)}")
+              if classes[row.type[0]].reference_classes.include?(table.id.val)
+                write_semantic_error("Circular Class References of #{entry.val} at line:#{entry.line_info} index:#{entry.start_index}", "#{construct_table(table, false)} \n #{construct_table(classes[row.type[0]].link, false)}")
                 cont.call()
-              elsif table.id == row.type[0]
-                write_semantic_error("Reference itself", construct_table(table, false))
+              elsif table.id.val == row.type[0]
+                write_semantic_error("Variable #{entry.val} of type #{row.type[0]} at line:#{entry.line_info} index:#{entry.start_index} reference itself", construct_table(table, false))
                 cont.call()
               else
-                classes[table.id].add_reference(row.type[0])
+                classes[table.id.val].add_reference(row.type[0])
               end
             end
           end
-        elsif row.kind == 'function' && entry != "program"
+        elsif row.kind == 'function' && entry.val != "program"
           unless ['int', 'float'].include? row.type[0]
             unless classes[row.type[0]]
               write_semantic_error("Non type", construct_table(table, false))
               cont.call()
             end
+          else
+            correct_semantic?(row.link, classes)
           end
         else
           correct_semantic?(row.link, classes)
@@ -159,7 +161,7 @@ class Parsing
       return true
     else
       print_table = construct_table(table, false)
-      message = "The #{row.kind} #{symbol} cannot be added because #{added.kind} #{symbol} was added before."
+      message = "The #{row.kind} #{symbol.val} at line:#{symbol.line_info} index:#{symbol.start_index} cannot be added because #{added.kind} #{symbol.val} was added before."
       write_semantic_error message, print_table
     end
   end
@@ -169,7 +171,7 @@ class Parsing
       rows = []
       table.keys.each do |entry|
         row = table[entry]
-        rows << [entry, row.kind, row.type, (expand ? construct_table(row.link) : row.link)]
+        rows << [entry.val, row.kind, row.type, (expand ? construct_table(row.link) : row.link)]
       end
       return Terminal::Table.new rows: rows
     end
@@ -205,7 +207,7 @@ class Parsing
 
   def look_ahead_is (token)
     if @look_ahead.kind_of? IdToken
-      return @look_ahead.val if token == 'id'
+      return @look_ahead if token == 'id'
     elsif @look_ahead.kind_of? IntegerToken
       return @look_ahead.val.to_i if token == "integerNumber"
     elsif @look_ahead.kind_of? FloatToken
@@ -288,18 +290,14 @@ class Parsing
   def varOrFuncDecl(id, the_type)
     if @set_table["ArraySizes"].first_set_include? @look_ahead
       if (the_size= arraySize_star()) && match(";")
-        if add_to_table(@current_symbol_table, id, TableRow.new(@current_symbol_table, 'variable', [the_type, the_size]))
-          puts "Add Variable"
-        end
+        add_to_table(@current_symbol_table, id, TableRow.new(@current_symbol_table, 'variable', [(the_type.kind_of?(String) ? the_type : the_type.val), the_size]))
         if classBody()
           write "VarOrFuncDecl", "ArraySizes()", ";", "ClassBody"
         end
       end
     elsif look_ahead_is ";"
       if match(";")
-        if add_to_table(@current_symbol_table, id, TableRow.new(@current_symbol_table, 'variable', [the_type, []]))
-          puts "Add Variable"
-        end
+        add_to_table(@current_symbol_table, id, TableRow.new(@current_symbol_table, 'variable', [(the_type.kind_of?(String) ? the_type : the_type.val), []]))
         if classBody()
           write "VarOrFuncDecl", ";", "ClassBody"
         end
@@ -307,7 +305,7 @@ class Parsing
     elsif look_ahead_is "("
       if match("(") && (params=fParams()) && match(")")
         params_type = params.map{|param| param["type"]}
-        row = TableRow.new(@current_symbol_table, 'function', [the_type, params_type])
+        row = TableRow.new(@current_symbol_table, 'function', [(the_type.kind_of?(String) ? the_type : the_type.val), params_type])
         if add_to_table(@current_symbol_table, id, row)
           row.link = @current_symbol_table = SymbolTable.new(id, 'function', row)
           params.each{|param| add_to_table(@current_symbol_table, param["id"], TableRow.new(@current_symbol_table, 'parameter', param["type"]))}
@@ -442,10 +440,9 @@ class Parsing
   def varDeclTail(the_type)
     if look_ahead_is "id"
       if (id=match("id")) && (the_size=arraySize_star()) && match(";")
-        row = TableRow.new(@current_symbol_table, 'variable', [the_type, the_size])
-        if add_to_table(@current_symbol_table, id, row)
-          puts "Added variable #{id}"
-        end
+        row = TableRow.new(@current_symbol_table, 'variable', [(the_type.kind_of?(String) ? the_type : the_type.val), the_size])
+        add_to_table(@current_symbol_table, id, row)
+
         if funcBodyInner()
           write "VarDeclTail", "idToken", "ArraySizes", ";", "FuncBodyInner"
         end
@@ -458,10 +455,8 @@ class Parsing
   def varDeclorAssignStat(the_type)
     if look_ahead_is "id"
       if (id=match("id")) && (the_size=arraySize_star()) && match(";")
-        row = TableRow.new(@current_symbol_table, 'variable', [the_type, the_size])
-        if add_to_table(@current_symbol_table, id, row)
-          puts "added variable #{id}"
-        end
+        row = TableRow.new(@current_symbol_table, 'variable', [(the_type.kind_of?(String) ? the_type : the_type.val), the_size])
+        add_to_table(@current_symbol_table, id, row)
         if funcBodyInner()
           write "VarDeclorAssignStat", "idToken", "ArraySizes", ";", "FuncBodyInner"
         end
@@ -843,7 +838,7 @@ class Parsing
     if @set_table["Type"].first_set_include? @look_ahead
       if (the_type=type()) && (id=match("id")) && (size=arraySize_star()) && (other_params=fParamsTail_star())
         write "FParams", "Type", "idToken", "ArraySizes", "FParamsTails"
-        return other_params.push({"id"=> id, "type"=> [the_type, size]})
+        return other_params.push({"id"=> id, "type"=> [(the_type.kind_of?(String) ? the_type : the_type.val), size]})
       end
     elsif @set_table["FParams"].follow_set_include? @look_ahead
       write "FParams", "ε"
@@ -899,7 +894,7 @@ class Parsing
       end
       if match(",") && (the_type=type()) && (id=match("id")) && (the_size=arraySize_star())
         write "FParamsTail", ",", "Type", "id", "ArraySizes"
-        return {"id"=> id, "type"=> [the_type, the_size]}
+        return {"id"=> id, "type"=> [(the_type.kind_of?(String) ? the_type : the_type.val), the_size]}
       end
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
@@ -967,15 +962,17 @@ set_table.insert_from_file 'set_table.txt'
 
 @tokenizer = Tokenizer.new
 @tokenizer.text = "
+class FirstClass {
+  FirstClass x;
+  int x3[1][2][3];
+
+  float method2(OtherType y){
+    FirstClass var;
+  };
+};
 program{
-  int x;
-  float y;
-};
-float y(){
-  int x;
-};
-int f(int y[2][3], float y){
-  float z;
+  FirstClass y[0][0][0];
+  int y;
 };
 "
 @tokenizer.tokenize

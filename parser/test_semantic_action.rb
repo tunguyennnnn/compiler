@@ -8,7 +8,7 @@ class TestSemanticAction < Minitest::Test
     @set_table = set_table.table
   end
 
-  def test_correct_program_using_primitive_type
+  def test_wrong_program_using_primitive_type
     @tokenizer = Tokenizer.new
     @tokenizer.text = "
     class FirstClass {
@@ -29,10 +29,10 @@ class TestSemanticAction < Minitest::Test
     @tokenizer.remove_error
     parser = Parsing.new(@tokenizer.tokens, @set_table)
     assert_equal(true, parser.parse)
-    assert_equal(true, parser.correct_semantic)
+    assert_equal(false, parser.correct_semantic)
   end
 
-  def test_correct_program_using_new_type_1
+  def test_wrong_program_using_new_type_1
     @tokenizer = Tokenizer.new
     @tokenizer.text = "
     class FirstClass {
@@ -55,7 +55,7 @@ class TestSemanticAction < Minitest::Test
     @tokenizer.remove_error
     parser = Parsing.new(@tokenizer.tokens, @set_table)
     assert_equal(true, parser.parse)
-    assert_equal(true, parser.correct_semantic)
+    assert_equal(false, parser.correct_semantic)
   end
 
   def test_semantic_error_in_program_repeated_var
