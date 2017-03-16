@@ -1,6 +1,12 @@
-Semantic errors are: 
-Non type
-+---+----------+--------------------+--+
-| x | variable | ["int", []]        |  |
-| f | function | ["SecondType", []] |  |
-+---+----------+--------------------+--+
+Semantic errors are:
+The variable x at line:4 index:6 cannot be added because variable x was added before.
++---+----------+---------------+--+
+| x | variable | ["float", []] |  |
++---+----------+---------------+--+
+function func2 at line:22 index:11 has return type FirstType1 undefined
++------------+----------+--------------------------------------+--+
+| FirstType  | class    |                                      |  |
+| SecondType | class    |                                      |  |
+| program    | function |                                      |  |
+| func2      | function | ["FirstType1", [["SecondType", []]]] |  |
++------------+----------+--------------------------------------+--+

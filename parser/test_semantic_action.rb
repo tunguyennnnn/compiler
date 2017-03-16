@@ -308,4 +308,64 @@ class TestSemanticAction < Minitest::Test
     assert_equal(true, parser.correct_semantic)
   end
 
+  def test_semantic_correct_1
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+    class FirstType{
+      int x;
+      SecondType f(FirstType aVar, int z){
+        int y;
+        y = 3;
+
+      };
+    };
+    class SecondType{
+      FirstType f(int x){
+        float y;
+      };
+    };
+    program{
+      int x;
+    };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    assert_equal(true, parser.parse)
+    assert_equal(true, parser.correct_semantic)
+  end
+
+  def test_semantic_correct_1
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+    class FirstType{
+      int x;
+      float z[1][2][4];
+      SecondType f(FirstType aVar){
+        int y;
+        y = 3;
+
+      };
+    };
+    class SecondType{
+      FirstType q[1][2];
+      FirstType f(int x){
+        float y;
+      };
+    };
+    program{
+      int x;
+      FirstType y[1][2][3];
+    };
+    FirstType func2(SecondType q){
+      FirstType x;
+    };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    assert_equal(true, parser.parse)
+    assert_equal(true, parser.correct_semantic)
+  end
+
 end

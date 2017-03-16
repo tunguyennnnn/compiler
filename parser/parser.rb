@@ -142,7 +142,7 @@ class Parsing
         elsif row.kind == 'function' && entry.val != "program"
           unless ['int', 'float'].include? row.type[0]
             unless classes[row.type[0]]
-              write_semantic_error("Non type", construct_table(table, false))
+              write_semantic_error("function #{entry.val} at line:#{entry.line_info} index:#{entry.start_index} has return type #{row.type[0]} undefined", construct_table(table, false))
               cont.call()
             end
           else
@@ -373,10 +373,10 @@ class Parsing
 
   def funcHead
     if @set_table["Type"].first_set_include? @look_ahead
-      if (type=type()) && (id=match("id"))
+      if (the_type=type()) && (id=match("id"))
         if match("(") && (params=fParams()) && match(")")
           params_type= params.map{|param| param["type"]}
-          row = TableRow.new(@global_table, 'function', [type, params_type])
+          row = TableRow.new(@global_table, 'function', [the_type.val, params_type])
           if add_to_table(@current_symbol_table, id, row)
             row.link = @current_symbol_table = SymbolTable.new(id, "function", row)
             params.each{|param| add_to_table(@current_symbol_table, param["id"], TableRow.new(@current_symbol_table, 'parameter', param["type"]))}
@@ -962,17 +962,28 @@ set_table.insert_from_file 'set_table.txt'
 
 @tokenizer = Tokenizer.new
 @tokenizer.text = "
-class FirstClass {
-  FirstClass x;
-  int x3[1][2][3];
+class FirstType{
+  float x;
+  int x;
+  float z[1][2][4];
+  SecondType f(FirstType aVar){
+    int y;
+    y = 3;
 
-  float method2(OtherType y){
-    FirstClass var;
+  };
+};
+class SecondType{
+  FirstType q[1][2];
+  FirstType f(int x){
+    float y;
   };
 };
 program{
-  FirstClass y[0][0][0];
-  int y;
+  int x;
+  FirstType y[1][2][3];
+};
+FirstType1 func2(SecondType q){
+  FirstType x;
 };
 "
 @tokenizer.tokenize
