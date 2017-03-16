@@ -1,4 +1,4 @@
-Semantic errors are:
+---------------------------
 The variable x at line:4 index:6 cannot be added because variable x was added before.
 +---+----------+---------------+--+
 | x | variable | ["float", []] |  |
@@ -10,3 +10,83 @@ function func2 at line:22 index:11 has return type FirstType1 undefined
 | program    | function |                                      |  |
 | func2      | function | ["FirstType1", [["SecondType", []]]] |  |
 +------------+----------+--------------------------------------+--+
+---------------------------
+Circular Class References of z at line:7 index:16
++---+----------+--------------------+--+
+| z | variable | ["FirstType", [1]] |  |
++---+----------+--------------------+--+ 
+ +---+----------+------------------------+--+
+| x | variable | ["int", []]            |  |
+| y | variable | ["SecondType", [0, 1]] |  |
++---+----------+------------------------+--+
+---------------------------
+The parameter y at line:9 index:14 cannot be added because parameter y was added before.
++---+-----------+---------------+--+
+| y | parameter | ["float", []] |  |
++---+-----------+---------------+--+
+---------------------------
+---------------------------
+function f at line:4 index:17 has return type SecondType undefined
++---+----------+--------------------+--+
+| x | variable | ["int", []]        |  |
+| f | function | ["SecondType", []] |  |
++---+----------+--------------------+--+
+---------------------------
+The variable y at line:5 index:12 cannot be added because parameter y was added before.
++---+-----------+--------------------+--+
+| y | parameter | ["SecondType", []] |  |
++---+-----------+--------------------+--+
+---------------------------
+The variable y at line:5 index:12 cannot be added because variable y was added before.
++---+----------+--------------------+--+
+| x | variable | ["int", []]        |  |
+| y | variable | ["int", [0, 1, 2]] |  |
++---+----------+--------------------+--+
+The variable z at line:9 index:10 cannot be added because variable z was added before.
++---+-----------+-----------------+--+
+| y | parameter | ["int", [2, 3]] |  |
+| z | variable  | ["float", []]   |  |
++---+-----------+-----------------+--+
+---------------------------
+Type OtherType of parameter y at line:11 index:30 is undefined
++-----+-----------+--------------------+--+
+| y   | parameter | ["OtherType", []]  |  |
+| var | variable  | ["FirstClass", []] |  |
++-----+-----------+--------------------+--+
+---------------------------
+Type OtherType of parameter y at line:11 index:30 is undefined
++---+-----------+-------------------+--+
+| y | parameter | ["OtherType", []] |  |
++---+-----------+-------------------+--+
+---------------------------
+The variable x at line:4 index:12 cannot be added because variable x was added before.
++---+----------+-------------+--+
+| x | variable | ["int", []] |  |
++---+----------+-------------+--+
+---------------------------
+The parameter x at line:8 index:22 cannot be added because parameter x was added before.
++---+-----------+-------------------+--+
+| x | parameter | ["FirstType", []] |  |
++---+-----------+-------------------+--+
+---------------------------
+Type Sometype of variable y at line:4 index:15 is undefined
++---+----------+-------------------------+--+
+| x | variable | ["int", []]             |  |
+| y | variable | ["Sometype", [1, 2, 3]] |  |
++---+----------+-------------------------+--+
+---------------------------
+The variable y at line:5 index:12 cannot be added because variable y was added before.
++---+----------+--------------------+--+
+| x | variable | ["int", []]        |  |
+| y | variable | ["int", [0, 1, 2]] |  |
++---+----------+--------------------+--+
+The variable y at line:8 index:12 cannot be added because parameter y was added before.
++---+-----------+-----------------+--+
+| y | parameter | ["int", [2, 3]] |  |
++---+-----------+-----------------+--+
+---------------------------
+The variable y at line:5 index:12 cannot be added because variable y was added before.
++---+----------+--------------------+--+
+| x | variable | ["int", []]        |  |
+| y | variable | ["int", [0, 1, 2]] |  |
++---+----------+--------------------+--+
