@@ -23,6 +23,8 @@ def run_parser
   parser = Parsing.new(tokenizer.tokens, table)
   puts "Parsing result is: #{parser.parse}"
   parser.write_to_file
+  puts "Semantic result: #{parser.correct_semantic}"
+  puts parser.construct_table(parser.global_table)
 end
 
 
