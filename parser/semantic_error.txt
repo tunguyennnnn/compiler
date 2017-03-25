@@ -1,3 +1,1 @@
 Semantic errors are: 
-Cannot performed arithmetic expression on int 1 at 13  and  w at 13
-{#<IdToken:0x007fb18b039bb8 @val="x", @line_info=9, @start_index=8, @end_index=9, @class_type="Id">=>#<TableRow:0x007fb18c903360 @kind="variable", @type=["int", ["1"]], @link=nil, @table={...}>, #<IdToken:0x007fb18c91b708 @val="y", @line_info=10, @start_index=6, @end_index=7, @class_type="Id">=>#<TableRow:0x007fb18c902578 @kind="variable", @type=["Q", ["2", "3"]], @link=nil, @table={...}>, #<IdToken:0x007fb18c91a1f0 @val="z", @line_info=11, @start_index=6, @end_index=7, @class_type="Id">=>#<TableRow:0x007fb18c902078 @kind="variable", @type=["Q", []], @link=nil, @table={...}>}

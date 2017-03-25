@@ -20,7 +20,10 @@ def run_parser
     class Q{
       int d[2][2][4];
       int w(int x, float y){
+        for (int i = 0; i < 100; i = i+ 1){
 
+        };  
+        return (x);
       };
     };
     program {
@@ -28,7 +31,7 @@ def run_parser
     Q y[2][3];
     Q z;
     x[1] = 3 + 10 - 20;
-    y[2][1].d[2][1] = 1 + z.w(1, 2.4);
+    y[2][1].d[2][1][2] = 1 + z.w(1, 2.4);
     };"
   end
   tokenizer.tokenize

@@ -54,6 +54,8 @@ class SymbolTable < Hash
     @id = id
     @type = type
     @parent = parent
+    @loop_index = 1
+    @get_for_loop = 1
   end
 
   def is_global?
@@ -74,6 +76,22 @@ class SymbolTable < Hash
   def get_table(id, type)
     match_key = self.keys.keep_if{ |key| key.val == id.val}.first
     return self[match_key].link
+  end
+
+  def add_for_loop(id, type)
+    row = TableRow.new(self, 'for-loop', [])
+    self.add_symbol("for-loop-#{@loop_index}", row)
+    loop_table = SymbolTable.new("for-loop-#{@loop_index}", "for-loop", self)
+    row.link = loop_table
+    loop_table.add_symbol(id, TableRow.new(loop_table, 'variable', [type, []]))
+    @loop_index += 1
+    return loop_table
+  end
+
+  def get_for_loop()
+    loop_table = self["for-loop-#{@get_for_loop}"].link
+    @get_for_loop += 1
+    return loop_table
   end
 
   def find_type(id)

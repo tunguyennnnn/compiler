@@ -590,12 +590,15 @@ class Parsing
       end
     elsif look_ahead_is "for"
       if match("for") && match("(") && (the_type = type()) && (id = match("id")) && assignOp()
-        row = TableRow.new(@current_symbol_table, 'variable', [the_type, []])
-        add_to_table(@current_symbol_table, id, row)
+        @current_symbol_table = @current_symbol_table.add_for_loop(id, the_type)
+        @current_symbol_table_final = @current_symbol_table_final.get_for_loop() if second_pass?
         expr_type = MigrationType.new
         if expr(expr_type) && match(";")
-          validate_type(MigrationType.new(the_type), expr_type)
+
+          validate_type(MigrationType.new(id.val, the_type), expr_type)
           if relExpr() && match(";") && assignStat() && match(")") && statBlock() && match(";")
+            @current_symbol_table = @current_symbol_table.parent
+            @current_symbol_table_final = @current_symbol_table_final.parent if second_pass?
             write "StatementSpecial", "for", "(", "Type", "idToken", "AssignOp", "Expr", ";", "RelExpr", ";", "AssignStat", ")" && "StatBlock" && ";"
           end
         end
@@ -613,6 +616,11 @@ class Parsing
     elsif look_ahead_is "return"
       expr_type = MigrationType.new
       if match("return") && match("(") && expr(expr_type) && match(")") && match(";")
+        if second_pass?
+          unless @current_symbol_table_final.parent.type[0] == expr_type.type_name && expr_type.size == 0
+            write_semantic_error_second_pass("Wrong return type of #{expr_type.type.val} at #{expr_type.type.line_info}", @current_symbol_table_final)
+          end
+        end
         write "StatementSpecial", "return", "(", "Expr", ")", ";"
       end
     else
@@ -705,10 +713,10 @@ class Parsing
   def arithExprD_star(term_type, arith_types)
     if @set_table["ArithExprD"].first_set_include? @look_ahead
       arithExprD_type, arithExprD_types = MigrationType.new, MigrationType.new
-      puts "=============================----------------"
       if arithExprD(arithExprD_type) && arithExprD_star(arithExprD_type, arithExprD_types)
-        arithExprD_type.print_type if second_pass?
-        arith_types.copy_type_of(semcheckop(term_type, arithExprD_types)) if second_pass?
+        if second_pass?
+          arith_types.copy_type_of(semcheckop(term_type, arithExprD_types))
+        end
         write "ArithExprDs", "ArithExprD", "ArithExprDs"
       end
     elsif @set_table["ArithExprDs"].follow_set_include? @look_ahead
@@ -855,7 +863,7 @@ class Parsing
                 end
               }
               if correct_param
-                varHeadTail_type.copy_type_of(id_type)
+                varHeadTail_type.copy_type_of(MigrationType.new(id_type.type, type))
               end
             else
               write_semantic_error_second_pass("Wrong number of argument in function #{id_type.type.val} at #{id_type.type.line_info}", current_table)
@@ -867,7 +875,16 @@ class Parsing
         write "VarHeadTail", "(", "AParams", ")"
       end
     elsif @set_table["VarHeadTail"].follow_set_include? @look_ahead
-      variableHeadTail.copy_type_of(id_type) if second_pass?
+      if second_pass?
+        its_type = current_table.find_type(id_type.type)
+        if its_type
+          type, size = its_type
+          varHeadTail_type.copy_type_of(MigrationType.new(id_type.type, type, size.size))
+        else
+          write_semantic_error_second_pass("Undefined variable #{id_type.type.val} at #{id_type.type.line_info}", current_table)
+        end
+
+      end
       write "VarHeadTail", "ε"
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
@@ -941,7 +958,9 @@ class Parsing
 
   def variable(variable_type, the_type=nil, the_size=nil, the_table=nil)
     if look_ahead_is "id"
+
       if (the_type_prime = match("id")) && (the_size_prime = indice_star())
+        puts "1231231231231231231231312" if second_pass?
         next_table = @current_symbol_table_final
         if second_pass?
           if the_type
@@ -954,6 +973,7 @@ class Parsing
                 end
               end
             end
+
           end
         end
         variableTail_type = MigrationType.new
