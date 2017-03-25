@@ -16,15 +16,32 @@ def run_parser
     puts text
     tokenizer.text = text
   else
-    tokenizer.text = "class ABC {};program {};"
+    tokenizer.text = "
+    class Q{
+      int d[2][2][4];
+      int w(int x, float y){
+
+      };
+    };
+    program {
+    int x[1];
+    Q y[2][3];
+    Q z;
+    x[1] = 3 + 10 - 20;
+    y[2][1].d[2][1] = 1 + z.w(1, 2.4);
+    };"
   end
   tokenizer.tokenize
   tokenizer.remove_error
-  parser = Parsing.new(tokenizer.tokens, table)
+  parser = Parsing.new(tokenizer.tokens.dup, table)
   puts "Parsing result is: #{parser.parse}"
   parser.write_to_file
   puts "Semantic result: #{parser.correct_semantic}"
   puts parser.construct_table(parser.global_table)
+  parser.tokens = tokenizer.tokens
+  parser.final_table = parser.global_table
+  parser.second_pass = true
+  parser.parse
 end
 
 
