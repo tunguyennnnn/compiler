@@ -16,23 +16,62 @@ def run_parser
     puts text
     tokenizer.text = text
   else
-    tokenizer.text = "
-    class Q{
-      int d[2][2][4];
-      int w(int x, float y){
-        for (int i = 0; i < 100; i = i+ 1){
+    # tokenizer.text = "
+    # class Y{
+    #   d p[1][2];
+    # };
+    # class d{
+    #   Q x;
+    # };
+    # class Q{
+    #   float x;
+    #   int d[2][2][4];
+    #   int w(int x, float y){
+    #     for (int i = 0; i < 100; d[2][2][4] = i+ 1){
+    #       if (i > 10) then{
+    #          d[2][2][4] = i+ 1;
+    #       }else{
+    #         i = i -1;
+    #       };
+    #     };
+    #     return (x);
+    #   };
+    # };
+    # program {
+    # int o;
+    # int x[1][3];
+    # Q y[2][3];
+    # Q z;
+    # x[1][2] = 3 + 10 - 20;
+    # y[2][1].d[2][1][2] = 1 + z.w(1, 2.4);
+    # };"
 
-        };  
-        return (x);
-      };
+    tokenizer.text = "
+    class Y{
+      d p[1][2];
     };
-    program {
-    int x[1];
-    Q y[2][3];
-    Q z;
-    x[1] = 3 + 10 - 20;
-    y[2][1].d[2][1][2] = 1 + z.w(1, 2.4);
-    };"
+    class d{
+      Q x;
+    };
+    class Q{
+      float x;
+      int d[2][2][4];
+    };
+    program{
+      Q y[1][2][3];
+      int x;
+      int d[1];
+      x = 2;
+      d[1]=10;
+      x = d[1];
+      x = 1 + 2;
+      x = 2 + d[1];
+      x = x +2;
+      x = x + x + 5 + x;
+      x = not x;
+      x = x == 1;
+    };
+    "
   end
   tokenizer.tokenize
   tokenizer.remove_error
@@ -43,8 +82,12 @@ def run_parser
   puts parser.construct_table(parser.global_table)
   parser.tokens = tokenizer.tokens
   parser.final_table = parser.global_table
+  parser.final_table.generate_memory_allocation
+  puts parser.final_table.memory_allocation
   parser.second_pass = true
   parser.parse
+  puts "Semantic result second pass is: #{parser.correct_semantic}"
+  puts parser.code_generation
 end
 
 

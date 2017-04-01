@@ -527,7 +527,7 @@ class TestParser < Minitest::Test
     @tokenizer.remove_error
     parser = Parsing.new(@tokenizer.tokens, @set_table, true)
     assert_equal(true, parser.parse)
-  
+
     new_parser = Parsing.new(parser.tokens, @set_table)
     assert_equal(true, new_parser.parse)
   end
@@ -589,7 +589,7 @@ class TestParser < Minitest::Test
   def test_funcdef_error_recovery
     @tokenizer = Tokenizer.new
     @tokenizer.text = "class X{
-      float X(int x, X y,){
+      float x(int x, X y,){
         X a[2]3][4];
         return (a.run(a+3, x, ));
       };

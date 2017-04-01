@@ -1,3 +1,5 @@
+require_relative 'moon_interface'
+
 class TableRow
   attr_accessor :type, :kind, :link, :table
   def initialize(table, kind, type, link=nil)
@@ -21,21 +23,23 @@ class ClassRow < TableRow
 end
 
 class MigrationType
-  attr_accessor :type, :type_name, :size
-  def initialize(type=nil, type_name = '', size = 0)
+  attr_accessor :type, :type_name, :size, :array
+  def initialize(type=nil, type_name = '', size = 0, array = [])
     @type = type
     @type_name = type_name
     @size = size
+    @array = array
   end
 
   def copy_type_of(another_type)
     @type = another_type.type
     @type_name = another_type.type_name
     @size = another_type.size
+    @array = another_type.array
   end
 
   def print_type
-    puts "variable #{@type.val} type: #{@type_name} size: #{@size}"
+    puts "variable #{@type.val} type: #{@type_name} size: #{@size} array: #{@array}" if @type
   end
 
   def is_equal?(type)
@@ -48,7 +52,7 @@ class MigrationType
 end
 
 class SymbolTable < Hash
-  attr_accessor :type, :parent, :id
+  attr_accessor :type, :parent, :id, :memory_allocation
   def initialize(id,type,parent=nil) # parent = nil ->
     super()
     @id = id
@@ -56,6 +60,7 @@ class SymbolTable < Hash
     @parent = parent
     @loop_index = 1
     @get_for_loop = 1
+    @moon_interface = MoonInterface.new
   end
 
   def is_global?
@@ -81,7 +86,7 @@ class SymbolTable < Hash
   def add_for_loop(id, type)
     row = TableRow.new(self, 'for-loop', [])
     self.add_symbol("for-loop-#{@loop_index}", row)
-    loop_table = SymbolTable.new("for-loop-#{@loop_index}", "for-loop", self)
+    loop_table = SymbolTable.new("for-loop-#{@loop_index}", "for-loop", row)
     row.link = loop_table
     loop_table.add_symbol(id, TableRow.new(loop_table, 'variable', [type, []]))
     @loop_index += 1
@@ -114,5 +119,369 @@ class SymbolTable < Hash
     else
       return nil
     end
+  end
+
+  def generate_memory_allocation
+    @memory_allocation = {}
+    pending_classes = {}
+    self.each do |key, value|
+      word_key = key.val
+      unless word_key == "program"
+        if value.kind == "class"
+          allocation = generate_class_allocation(word_key, value)
+          if allocation[1].kind_of? MemoryAllocation
+            @memory_allocation[allocation[0]] = allocation[1]
+          else
+            type, pending_process = allocation
+            pending_classes[type] = pending_classes[type] || []
+            pending_classes[type].push(pending_process)
+          end
+        else
+          #generate_function_allocation(word_key, value, "function-#{word_key}")
+        end
+      end
+    end
+    until pending_classes.empty?
+      pending_classes.each do |type, processes|
+        puts "process size  is : #{processes.size}"
+        puts "include is? #{@memory_allocation} and #{type}"
+        if @memory_allocation.keys.include? type
+          processes.each_with_index do |process, index|
+            allocation = process.call()
+            if allocation[1].kind_of? MemoryAllocation
+              @memory_allocation[allocation[0]] = allocation[1]
+            else
+              dependency_type, process = allocation
+              pending_classes[dependency_type].push(process)
+            end
+            puts processes.delete(process)
+          end
+        end
+        if pending_classes[type].empty?
+          pending_classes.delete(type)
+        end
+      end
+    end
+  end
+
+  def generate_function_allocation(function_name, value, root)
+
+  end
+
+  def generate_class_allocation(class_name, class_info, allocation = nil, done_list = [])
+    class_table = class_info.link
+    allocation = allocation || MemoryAllocation.new(class_name, "class", "class-#{class_name}")
+    done_list = done_list
+    class_table.each do |key, row|
+      word_key = key.val
+      unless done_list.include? word_key
+        if row.kind == "variable"
+          type, size = row.type
+          if ["int", "float"].include?(type)
+            allocation.add_variable(word_key, type, size, type == "int" ? 1 : 2)
+            done_list.push(word_key)
+          else
+            if @memory_allocation[type]
+              allocation.add_variable(word_key, type, size, @memory_allocation[type].size)
+              done_list.push(word_key)
+            else
+              return type, lambda{
+                allocation.add_variable(word_key, type, size, @memory_allocation[type].size)
+                done_list.push(word_key)
+                return generate_class_allocation(class_name, class_info, allocation, done_list)
+              }
+            end
+          end
+        else
+          #generate_function_allocation(word_key, row, "#{allocation.root}_function-#{word_key}")
+        end
+      end
+    end
+    return class_name, allocation
+  end
+
+  def generate_variable_declaration_code(name, type, size, current_table)
+    variable_name = "#{current_table.generate_name}_variable-#{name}"
+    if ["int", "float"].include? type
+      if size.size == 0
+        @moon_interface.generate_memory_allocation(variable_name, type=="int"? 1: 2)
+        return "#{variable_name}    dw 0"
+      else
+        memory_size = size.map{|i| i.to_i}.inject(:*) * (type=="int"? 1: 2)
+        @moon_interface.generate_memory_allocation(variable_name, memory_size)
+        return "#{variable_name}    res #{memory_size}"
+      end
+    else
+      if size.size == 0
+        size = [1]
+      else
+        size = size.map{|i| i.to_i}
+      end
+      memory_size = size.map{|i| i.to_i}.inject(:*) * get_size_of(type)
+      @moon_interface.generate_memory_allocation(variable_name, memory_size)
+      return "#{variable_name}    res #{memory_size}"
+    end
+  end
+
+  def generate_assignment_code(lsh_name, type, size, rhs, current_table)
+    register = @moon_interface.take_a_register
+    register_name = register.register_name
+    lsh_name = "#{current_table.generate_name}_variable-#{lsh_name}"
+    if rhs.is_a? Numeric
+      if size.size == 0
+        register.free
+        return "sub #{register_name},#{register_name},#{register_name}\naddi #{register_name},#{register_name},#{rhs}\nsw #{lsh_name}(r0),#{register_name}"
+      else
+        size_register = @moon_interface.take_a_register
+        size_register_name = size_register.register_name
+        register.free
+        size_register.free
+        return "sub #{register_name},#{register_name},#{register_name}\naddi #{register_name},#{register_name},#{rhs}\nsub #{size_register_name},#{size_register_name},#{size_register_name}\naddi #{size_register_name},#{size_register_name},#{size.map{|i| i.to_i}.inject(:*)}\nsw #{lsh_name}(#{size_register_name}),#{register_name}"
+      end
+    elsif rhs.is_a? String
+      if size.size == 0
+        register.free
+        return "lw #{register_name},#{rhs}\nsw #{lsh_name},#{register_name}"
+      else
+        size_register = @moon_interface.take_a_register
+        size_register_name = size_register.register_name
+        size_register.free
+        register.free
+        return "sub #{register_name},#{register_name},#{register_name}\naddi #{register_name},#{register_name},#{rhs[0]}\nsub #{size_register_name},#{size_register_name},#{size_register_name}\naddi #{size_register_name},#{size_register_name},#{size.map{|i| i.to_i}.inject(:*)}\nsw #{lsh_name}(#{size_register_name}),#{register_name}"
+      end
+    end
+  end
+
+  def generate_rhs_code(name, type, size, current_table)
+    if size.size == 0
+      return "", "#{current_table.generate_name}_variable-#{name}(r0)"
+    else
+      register = @moon_interface.take_a_register
+      register_name = register.register_name
+      register.free
+      return "sub #{register_name},#{register_name},#{register_name}\naddi #{register_name},#{register_name},#{size.map{|i| i.to_i}.inject(:*)}", "#{current_table.generate_name}_variable-#{name}(#{register_name})"
+    end
+  end
+
+  def generate_rhs_add_code(lhs, rhs, current_table)
+    if lhs.is_a? Numeric and rhs.is_a? Numeric
+      register = @moon_interface.take_a_register
+      register_name = register.register_name
+      register.free
+      unique_address = @moon_interface.generate_unique_address
+      return "addi #{register_name},#{lhs},#{rhs}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{register_name}", "#{unique_address}(r0)"
+    elsif lhs.is_a? Numeric and rhs.is_a? String
+      register = @moon_interface.take_a_register
+      register_name = register.register_name
+      register.free
+      second_register = @moon_interface.take_a_register
+      second_register_name = second_register.register_name
+      unique_address = @moon_interface.generate_unique_address
+      register.free
+      second_register.free
+      return "lw #{register_name},#{rhs}\naddi #{second_register_name},#{register_name},#{lhs}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{second_register_name}", "#{unique_address}(r0)"
+    elsif rhs.is_a? Numeric and lhs.is_a? String
+      register = @moon_interface.take_a_register
+      register_name = register.register_name
+      register.free
+      second_register = @moon_interface.take_a_register
+      second_register_name = second_register.register_name
+      unique_address = @moon_interface.generate_unique_address
+      register.free
+      second_register.free
+      return "lw #{register_name},#{lhs}\naddi #{second_register_name},#{register_name},#{rhs}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{second_register_name}", "#{unique_address}(r0)"
+    else
+      register_one = @moon_interface.take_a_register
+      register_two = @moon_interface.take_a_register
+      register_three = @moon_interface.take_a_register
+      r1_name = register_one.register_name
+      r2_name = register_two.register_name
+      r3_name = register_three.register_name
+      register_one.free
+      register_two.free
+      register_three.free
+      unique_address = @moon_interface.generate_unique_address
+      return "lw #{r1_name},#{rhs}\nlw #{r2_name},#{lhs}\nadd #{r3_name},#{r1_name},#{r2_name}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{r3_name}", "#{unique_address}(r0)"
+    end
+  end
+
+  def generate_rhs_mulp_code(lhs, rhs, current_table)
+    if lhs.is_a? Numeric and rhs.is_a? Numeric
+      register = @moon_interface.take_a_register
+      register_name = register.register_name
+      register.free
+      unique_address = @moon_interface.generate_unique_address
+      return "muli #{register_name},#{lhs},#{rhs}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{register_name}", "#{unique_address}(r0)"
+    elsif lhs.is_a? Numeric and rhs.is_a? String
+      register = @moon_interface.take_a_register
+      register_name = register.register_name
+      register.free
+      second_register = @moon_interface.take_a_register
+      second_register_name = second_register.register_name
+      unique_address = @moon_interface.generate_unique_address
+      register.free
+      second_register.free
+      return "lw #{register_name},#{rhs}\nmuli #{second_register_name},#{register_name},#{lhs}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{second_register_name}", "#{unique_address}(r0)"
+    elsif rhs.is_a? Numeric and lhs.is_a? String
+      register = @moon_interface.take_a_register
+      register_name = register.register_name
+      register.free
+      second_register = @moon_interface.take_a_register
+      second_register_name = second_register.register_name
+      unique_address = @moon_interface.generate_unique_address
+      register.free
+      second_register.free
+      return "lw #{register_name},#{lhs}\nmuli #{second_register_name},#{register_name},#{rhs}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{second_register_name}", "#{unique_address}(r0)"
+    else
+      register_one = @moon_interface.take_a_register
+      register_two = @moon_interface.take_a_register
+      register_three = @moon_interface.take_a_register
+      r1_name = register_one.register_name
+      r2_name = register_two.register_name
+      r3_name = register_three.register_name
+      register_one.free
+      register_two.free
+      register_three.free
+      unique_address = @moon_interface.generate_unique_address
+      return "lw #{r1_name},#{rhs}\nlw #{r2_name},#{lhs}\nmul #{r3_name},#{r1_name},#{r2_name}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{r3_name}", "#{unique_address}(r0)"
+    end
+  end
+
+  def generate_relative_code(operator, lhs, rhs, current_table)
+    case operator
+    when "=="
+      rel_operator = "ceq"
+    else
+    end
+    if lhs.is_a? Numeric and rhs.is_a? Numeric
+      register_1 = @moon_interface.take_a_register
+      register_2 = @moon_interface.take_a_register
+      register_3 = @moon_interface.take_a_register
+      r1_name = register_1.register_name
+      r2_name = register_2.register_name
+      r3_name = register_3.register_name
+      register_1.free
+      register_2.free
+      register_3.free
+      unique_address = @moon_interface.generate_unique_address
+      return "addi #{r1_name},r0,#{lhs}\n" +
+             "addi #{r2_name},r0,#{rhs}\n" +
+             "#{rel_operator} #{r3_name},#{r1_name},#{r2_name}\n" +
+             "#{unique_address} dw 0\n" +
+             "sw #{unique_address}(r0),#{r3_name}",
+             "#{unique_address}(r0)"
+    elsif lhs.is_a? String and rhs.is_a? Numeric
+      register_1 = @moon_interface.take_a_register
+      register_2 = @moon_interface.take_a_register
+      r1_name = register_1.register_name
+      r2_name = register_2.register_name
+      register_1.free
+      register_2.free
+      unique_address = @moon_interface.generate_unique_address
+      return "lw #{r1_name},#{lhs}\n"+
+             "#{rel_operator}i #{r2_name},#{r1_name},#{rhs}\n" +
+             "#{unique_address} dw 0\n" +
+             "sw #{unique_address}(r0),#{r2_name}",
+             "#{unique_address}(r0)"
+    elsif lhs.is_a? Numeric and rhs.is_a? String
+      register_1 = @moon_interface.take_a_register
+      register_2 = @moon_interface.take_a_register
+      r1_name = register_1.register_name
+      r2_name = register_2.register_name
+      register_1.free
+      register_2.free
+      unique_address = @moon_interface.generate_unique_address
+      return "lw #{r1_name},#{rhs}\n"+
+             "#{rel_operator}i #{r2_name},#{r1_name},#{lhs}\n" +
+             "#{unique_address} dw 0\n" +
+             "sw #{unique_address}(r0),#{r2_name}",
+             "#{unique_address}(r0)"
+    else
+      register_1 = @moon_interface.take_a_register
+      register_2 = @moon_interface.take_a_register
+      register_3 = @moon_interface.take_a_register
+      r1_name = register_1.register_name
+      r2_name = register_2.register_name
+      r3_name = register_3.register_name
+      register_1.free
+      register_2.free
+      register_3.free
+      unique_address = @moon_interface.generate_unique_address
+      return "lw #{r1_name},#{lhs}\n" +
+             "lw #{r2_name},#{rhs}\n" +
+             "#{rel_operator} #{r3_name},#{r1_name},#{r2_name}\n" +
+             "#{unique_address} dw 0\n" +
+             "sw #{unique_address}(r0),#{r3_name}\n",
+             "#{unique_address}(r0)"
+    end
+  end
+
+  def generate_not_code(body, current_symbol_table)
+    if body.is_a? Numeric
+      first_register = @moon_interface.take_a_register
+      first_register_name = first_register.register_name
+      second_register = @moon_interface.take_a_register
+      second_register_name = second_register.register_name
+      first_register.free
+      second_register.free
+      unique_address_1 = @moon_interface.generate_unique_address
+      zero_address = @moon_interface.generate_zero_address
+      end_not = @moon_interface.generate_end_not_address
+      return "sub #{first_register_name},#{first_register_name},#{first_register_name},\naddi #{first_register_name},#{first_register_name},#{body}\n" +
+             "not #{second_register_name},#{first_register_name}\n" +
+             "#{unique_address_1} dw 0\n" +
+             "bz #{second_register_name},#{zero_address}\n" +
+             "addi #{first_register_name},r0,1\n" +
+             "sw #{unique_address_1}(r0),#{first_register_name}" +
+             "j #{end_not}\n" +
+             "#{zero_address} sw #{unique_address_1}(r0),r0\n" +
+             "#{end_not}", "#{unique_address_1}(r0)"
+    else
+      first_register = @moon_interface.take_a_register
+      first_register_name = first_register.register_name
+      second_register = @moon_interface.take_a_register
+      second_register_name = second_register.register_name
+      first_register.free
+      second_register.free
+      unique_address_1 = @moon_interface.generate_unique_address
+      zero_address = @moon_interface.generate_zero_address
+      end_not = @moon_interface.generate_end_not_address
+      return "lw #{first_register_name}, #{body}\nnot #{second_register_name},#{first_register_name}\n" +
+             "#{unique_address_1} dw 0\n" +
+             "bz #{second_register_name},#{zero_address}\n" +
+             "addi #{first_register_name},r0,1\n" +
+             "sw #{unique_address_1}(r0),#{first_register_name}" +
+             "j #{end_not}\n" +
+             "#{zero_address} sw #{unique_address_1}(r0),r0\n" +
+             "#{end_not}", "#{unique_address_1}(r0)"
+    end
+  end
+
+  def get_size_of(type)
+    @memory_allocation[type].size
+  end
+
+  def generate_name
+    "#{@type}-#{@id}"
+  end
+end
+
+class MemoryAllocation
+  attr_accessor :name, :type, :size
+  def initialize(name, type, root)
+    @name = name
+    @type = type
+    @root = root
+    @size = 0
+    @info = []
+  end
+
+  def add_variable(name, type, size, multiply_factor)
+    if size.empty?
+      @size += multiply_factor
+    else
+      @size += size.map{|i| i.to_i}.inject(:*)*multiply_factor
+    end
+    @info.push({"#{@root}_variable-#{name}" => size})
   end
 end

@@ -49,7 +49,7 @@ class WriteToFile
 end
 
 class Parsing
-  attr_reader :look_ahead, :stack, :global_table, :current_symbol_table, :correct_semantic
+  attr_reader :look_ahead, :stack, :global_table, :current_symbol_table, :correct_semantic, :code_generation
   attr_accessor :final_table, :second_pass, :tokens
   def initialize(tokens, set_table, skip_error=false)
     @tokens = tokens
@@ -62,6 +62,7 @@ class Parsing
     @correct_semantic = true
     @final_table = nil
     File.open("semantic_error.txt", 'w') {|f| f.write("Semantic errors are: \n") }
+    @code_generation = []
   end
 
   def second_pass?
@@ -276,7 +277,9 @@ class Parsing
     if look_ahead_is "class"
       if match("class") && (id=match("id"))
         row = ClassRow.new(@global_table, 'class', '')
-        @current_symbol_table_final = @final_table.get_table(id, 'class') if second_pass?
+        if second_pass?
+          @current_symbol_table_final = @final_table.get_table(id, 'class')
+        end
         if add_to_table(@global_table, id, row)
           row.link = @current_symbol_table = SymbolTable.new(id, 'class', row)
         end
@@ -473,7 +476,9 @@ class Parsing
       if (id=match("id")) && (the_size=arraySize_star()) && match(";")
         row = TableRow.new(@current_symbol_table, 'variable', [(the_type.kind_of?(String) ? the_type : the_type.val), the_size])
         add_to_table(@current_symbol_table, id, row)
-
+        if second_pass?
+          @code_generation.push(@final_table.generate_variable_declaration_code(id.val, the_type.val, the_size, @current_symbol_table_final))
+        end
         if funcBodyInner()
           write "VarDeclTail", "idToken", "ArraySizes", ";", "FuncBodyInner"
         end
@@ -488,6 +493,9 @@ class Parsing
       if (id=match("id")) && (the_size=arraySize_star()) && match(";")
         row = TableRow.new(@current_symbol_table, 'variable', [(the_type.kind_of?(String) ? the_type : the_type.val), the_size])
         add_to_table(@current_symbol_table, id, row)
+        if second_pass?
+          @code_generation.push(@final_table.generate_variable_declaration_code(id.val, the_type.val, the_size, @current_symbol_table_final))
+        end
         if funcBodyInner()
           write "VarDeclorAssignStat", "idToken", "ArraySizes", ";", "FuncBodyInner"
         end
@@ -496,8 +504,11 @@ class Parsing
       variableTail_type = MigrationType.new
       if (the_size= indice_star()) && variableTail(MigrationType.new(the_type), the_size, variableTail_type, @current_symbol_table_final) && assignOp()
         expr_type = MigrationType.new
-        if expr(expr_type) && match(";")
-          validate_type(variableTail_type, expr_type) if second_pass?
+        if (expr_value = expr(expr_type)) && match(";")
+          if second_pass?
+            validate_type(variableTail_type, expr_type)
+            @code_generation.push(@final_table.generate_assignment_code(variableTail_type.type.val, variableTail_type.type_name, the_size, expr_value, @current_symbol_table_final))
+          end
           if statement_star()
             write "VarDeclorAssignStat", "Indices", "VariableTail", "AssignOp", "Expr", ";", "Statements"
           end
@@ -506,12 +517,13 @@ class Parsing
     elsif @set_table["AssignOp"].first_set_include? @look_ahead
       if assignOp()
         expr_type = MigrationType.new
-        if expr(expr_type) && match(";")
+        if (expr_value = expr(expr_type)) && match(";")
           if second_pass?
             its_type = @current_symbol_table_final.find_type(the_type)
             if its_type
               type_name, size = its_type
               validate_type(MigrationType.new(the_type, type_name, size.size), expr_type)
+              @code_generation.push(@final_table.generate_assignment_code(the_type.val, type_name, size, expr_value, @current_symbol_table_final))
             else
               write_semantic_error_second_pass("Undefined variable #{the_type.val} at #{the_type.line_info}", @current_symbol_table_final)
             end
@@ -597,8 +609,8 @@ class Parsing
 
           validate_type(MigrationType.new(id.val, the_type), expr_type)
           if relExpr() && match(";") && assignStat() && match(")") && statBlock() && match(";")
-            @current_symbol_table = @current_symbol_table.parent
-            @current_symbol_table_final = @current_symbol_table_final.parent if second_pass?
+            @current_symbol_table = @current_symbol_table.parent.table
+            @current_symbol_table_final = @current_symbol_table_final.parent.table if second_pass?
             write "StatementSpecial", "for", "(", "Type", "idToken", "AssignOp", "Expr", ";", "RelExpr", ";", "AssignStat", ")" && "StatBlock" && ";"
           end
         end
@@ -633,8 +645,11 @@ class Parsing
       variable_type = MigrationType.new
       if variable(variable_type) && assignOp()
         expr_type = MigrationType.new
-        if expr(expr_type)
-          validate_type(variable_type, expr_type)
+        if (expr_value = expr(expr_type))
+          if second_pass?
+            validate_type(variable_type, expr_type)
+            @code_generation.push(@final_table.generate_assignment_code(variable_type.type.val, variable_type.type_name, variable_type.array, expr_value, @current_symbol_table_final))
+          end
           write "AssignStat", "Variable", "AssignOp", "Expr"
         end
       end
@@ -663,8 +678,11 @@ class Parsing
     nil if (!skip_errors(@set_table["Expr"]))
     if @set_table["ArithExpr"].first_set_include? @look_ahead
       arith_type, rel_type =  MigrationType.new, MigrationType.new
-      if arithExpr(arith_type) && relExprTail(arith_type, rel_type)
-        expr_type.copy_type_of(rel_type) if second_pass?
+      if (arithExpr_value = arithExpr(arith_type)) && (relExprTail_value = relExprTail(arith_type, rel_type, arithExpr_value))
+        if second_pass?
+          expr_type.copy_type_of(rel_type)
+          return arithExpr_value
+        end
         write "Expr", "ArithExpr", "RelExprTail"
       end
     else
@@ -672,11 +690,17 @@ class Parsing
     end
   end
 
-  def relExprTail(arith_type, rel_type)
+  def relExprTail(arith_type, rel_type, lhs_value)
     if @set_table["RelOp"].first_set_include? @look_ahead
       arith_type_prime =  MigrationType.new
-      if relOp() && arithExpr(arith_type_prime)
-        rel_type.copy_type_of(semcheckop(arith_type, arith_type_prime)) if second_pass?
+      if (relOp_value = relOp()) && (rhs_value = arithExpr(arith_type_prime))
+        if second_pass?
+          puts ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+          rel_type.copy_type_of(semcheckop(arith_type, arith_type_prime))
+          first_code, second_code = @final_table.generate_relative_code(relOp_value, lhs_value, rhs_value, @current_symbol_table_final)
+          @code_generation.push(first_code)
+          return second_code
+        end
         write "RelExprTail", "RelOp", "ArithExpr"
       end
     elsif @set_table["RelExprTail"].follow_set_include? @look_ahead
@@ -690,7 +714,8 @@ class Parsing
   def relExpr
     if @set_table["ArithExpr"].first_set_include? @look_ahead
       arith_type1, arith_type2 = MigrationType.new, MigrationType.new
-      if arithExpr(arith_type1) && relOp() && arithExpr(arith_type2)
+      if (lhs_value = arithExpr(arith_type1)) && (rel_value = relOp()) && (rhs_value = arithExpr(arith_type2))
+        puts "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
         write "RelExpr", "ArithExpr", "RelOp", "ArithExpr"
       end
     else
@@ -701,8 +726,11 @@ class Parsing
   def arithExpr(arith_type)
     if @set_table["Term"].first_set_include? @look_ahead
       term_type, arith_types = MigrationType.new, MigrationType.new
-      if term(term_type) && arithExprD_star(term_type, arith_types)
-        arith_type.copy_type_of(arith_types)  if second_pass?
+      if (term_value = term(term_type)) && (arithExprD_value = arithExprD_star(term_type, arith_types, term_value))
+        if second_pass?
+          arith_type.copy_type_of(arith_types)
+          return arithExprD_value
+        end
         write "ArithExpr", "Term", "ArithExprDs"
       end
     else
@@ -710,17 +738,23 @@ class Parsing
     end
   end
 
-  def arithExprD_star(term_type, arith_types)
+  def arithExprD_star(term_type, arith_types, term_value)
     if @set_table["ArithExprD"].first_set_include? @look_ahead
       arithExprD_type, arithExprD_types = MigrationType.new, MigrationType.new
-      if arithExprD(arithExprD_type) && arithExprD_star(arithExprD_type, arithExprD_types)
+      if (arithExprD_value = arithExprD(arithExprD_type)) && (arithExprD_star_value = arithExprD_star(arithExprD_type, arithExprD_types, arithExprD_value))
         if second_pass?
           arith_types.copy_type_of(semcheckop(term_type, arithExprD_types))
+          first_code, second_code = @final_table.generate_rhs_add_code(term_value, arithExprD_star_value, @current_symbol_table_final)
+          @code_generation.push(first_code)
+          return second_code
         end
         write "ArithExprDs", "ArithExprD", "ArithExprDs"
       end
     elsif @set_table["ArithExprDs"].follow_set_include? @look_ahead
-      arith_types.copy_type_of(term_type) if second_pass?
+      if second_pass?
+        arith_types.copy_type_of(term_type)
+        return term_value
+      end
       write "ArithExprDs", "ε"
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
@@ -730,8 +764,11 @@ class Parsing
   def arithExprD(arithExprD_type)
     if @set_table["AddOp"].first_set_include? @look_ahead
       term_type = MigrationType.new
-      if addOp() && term(term_type)
-        arithExprD_type.copy_type_of(term_type) if second_pass?
+      if addOp() && (term_value = term(term_type))
+        if second_pass?
+          arithExprD_type.copy_type_of(term_type)
+          return term_value
+        end
         return write "ArithExprD", "AddOp", "Term"
       end
     else
@@ -742,8 +779,11 @@ class Parsing
   def term(term_type)
     if @set_table["Factor"].first_set_include? @look_ahead
       factor_type, termD_types = MigrationType.new, MigrationType.new
-      if factor(factor_type) && termD_star(factor_type, termD_types)
-        term_type.copy_type_of(termD_types) if second_pass?
+      if (factor_value = factor(factor_type)) && (termD_star_value = termD_star(factor_type, termD_types, factor_value))
+        if second_pass?
+          term_type.copy_type_of(termD_types)
+          return termD_star_value
+        end
         return write "Term", "Factor", "TermDs"
       end
     else
@@ -751,17 +791,24 @@ class Parsing
     end
   end
 
-  def termD_star(term_type, termD_types)
+  def termD_star(term_type, termD_types, factor_value)
     if @set_table["TermD"].first_set_include? @look_ahead
       termD_type, termD_types_prime = MigrationType.new, MigrationType.new
-      if termD(termD_type) && termD_star(termD_type, termD_types_prime)
-        termD_types.copy_type_of(semcheckop(termD_type, termD_types_prime)) if second_pass?
-        return write "TermDs", "TermD", "TermDs"
+      if (termD_value = termD(termD_type)) && (termD_star_value = termD_star(termD_type, termD_types_prime, termD_value))
+        if second_pass?
+          termD_types.copy_type_of(semcheckop(termD_type, termD_types_prime))
+          first_code, second_code = @final_table.generate_rhs_mulp_code(factor_value, termD_star_value, @current_symbol_table_final)
+          @code_generation.push(first_code)
+          return second_code
+        end
+        write "TermDs", "TermD", "TermDs"
       end
     elsif @set_table["TermDs"].follow_set_include? @look_ahead
+      if second_pass?
+        termD_types.copy_type_of(term_type)
+        return factor_value
+      end
       write "TermDs", "ε"
-      termD_types.copy_type_of(term_type) if second_pass?
-      return true
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
@@ -770,10 +817,13 @@ class Parsing
   def termD(termD_type)
     if @set_table["MultOp"].first_set_include? @look_ahead
       factor_type = MigrationType.new
-      if mulOp() && factor(factor_type)
+      if mulOp() && (factor_value  = factor(factor_type))
         write "TermD", "MulOp", "Factor"
-        termD_type.copy_type_of(factor_type) if second_pass?
-        return true
+        if second_pass?
+          termD_type.copy_type_of(factor_type)
+          return factor_value
+        end
+        write "TermD", "MulOp", "Factor"
       end
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
@@ -784,32 +834,51 @@ class Parsing
     if @set_table["VarHead"].first_set_include? @look_ahead
       varHead_type = MigrationType.new
       if varHead(varHead_type, @current_symbol_table_final)
-        factor_type.copy_type_of(varHead_type) if second_pass?
+        if second_pass?
+          factor_type.copy_type_of(varHead_type)
+          moon_first, moon_second = @final_table.generate_rhs_code(factor_type.type.val, factor_type.type, factor_type.array, @current_symbol_table_final)
+          @code_generation.push(moon_first)
+          return moon_second
+        end
         write "Factor", "VarHead"
         return true
       end
     elsif look_ahead_is "integerNumber"
       if (the_type=match("integerNumber"))
-        factor_type.copy_type_of(MigrationType.new(the_type, "int", 0)) if second_pass?
+        if second_pass?
+          factor_type.copy_type_of(MigrationType.new(the_type, "int", 0))
+          return the_type.val.to_i
+        end
         write "Factor", "integerNumber"
         return true
       end
     elsif look_ahead_is "floatNumber"
       if (the_type = match("floatNumber"))
-        factor_type.copy_type_of(MigrationType.new(the_type, "float", 0)) if second_pass?
+        if second_pass?
+          factor_type.copy_type_of(MigrationType.new(the_type, "float", 0))
+          return the_type.val.to_i
+        end
         write "Factor", "floatNumber"
         return true
       end
     elsif look_ahead_is "("
       arith_type = MigrationType.new
-      if match("(") && arithExpr(arith_type) && match(")")
-        factor_type.copy_type_of(arith_type) if second_pass?
+      if match("(") && (arithExpr_value = arithExpr(arith_type)) && match(")")
+        if second_pass?
+          factor_type.copy_type_of(arith_type)
+          return arithExpr_value
+        end
         write "Factor", "(", "ArithExpr", ")"
       end
     elsif look_ahead_is "not"
       factor_type_prime = MigrationType.new
-      if match("not") && factor(factor_type_prime)
-        factor_type.copy_type_of(factor_type_prime) if second_pass?
+      if match("not") && (factor_value = factor(factor_type_prime))
+        if second_pass?
+          factor_type.copy_type_of(factor_type_prime)
+          first_code, second_code = @final_table.generate_not_code(factor_value, @current_table)
+          @code_generation.push(first_code)
+          return second_code
+        end
         write "Factor", "not", "Factor"
       end
     elsif @set_table["Sign"].first_set_include? @look_ahead
@@ -827,7 +896,9 @@ class Parsing
     if look_ahead_is "id"
       varHeadTail_type = MigrationType.new
       if (the_type=match("id")) && varHeadTail(MigrationType.new(the_type), varHeadTail_type, the_table)
-        varHead_type.copy_type_of(varHeadTail_type) if second_pass?
+        if second_pass?
+          varHead_type.copy_type_of(varHeadTail_type)
+        end
         write "VarHead", "id", "VarHeadTail"
       end
     else
@@ -934,7 +1005,7 @@ class Parsing
         its_type = current_table.find_type(id_type.type)
         if its_type
           type, size = its_type
-          varHeadEnd_type.copy_type_of(MigrationType.new(id_type.type, type, size.size - the_size.size))
+          varHeadEnd_type.copy_type_of(MigrationType.new(id_type.type, type, size.size - the_size.size, the_size))
         else
           write_semantic_error_second_pass("undefined variable #{id_type.type.val} at #{id_type.type.line_info}")
         end
@@ -960,7 +1031,6 @@ class Parsing
     if look_ahead_is "id"
 
       if (the_type_prime = match("id")) && (the_size_prime = indice_star())
-        puts "1231231231231231231231312" if second_pass?
         next_table = @current_symbol_table_final
         if second_pass?
           if the_type
@@ -999,7 +1069,7 @@ class Parsing
         its_type = the_table.find_type(the_type.type)
         if its_type
           type, size = its_type
-          variableTail_type.copy_type_of(MigrationType.new(the_type.type, type, size.size - the_size.size))
+          variableTail_type.copy_type_of(MigrationType.new(the_type.type, type, size.size - the_size.size, the_size))
         else
           write_semantic_error_second_pass("Undefined variable #{the_type.type.val}", @current_symbol_table_final)
         end
@@ -1181,12 +1251,15 @@ class Parsing
 
   def validate_type(type1, type2)
     if second_pass?
-      puts "Valuedata ---------------------"
-      type1.print_type
-      type2.print_type
-      if type1.type.class == type2.type.class
+      # puts "Valuedata ---------------------"
+      # type1.print_type
+      # type2.print_type
+      if type1.type && type2.type  && type1.type_name == type2.type_name && type1.size == type2.size
+        return true
       else
-        return false
+        if type1.type && type2.type
+          write_semantic_error_second_pass("Incompatible type of assignment at #{type1.type.line_info} for #{type1.type.val}", @current_symbol_table_final)
+        end
       end
     end
   end
@@ -1205,12 +1278,17 @@ class Parsing
         end
       else
         write_semantic_error_second_pass("uncompatiable types: #{type1.type.val} at #{type1.type.line_info} #{type2.type.val} #{type1.type.line_info}", @final_table)
-        return nil
+        return MigrationType.new
       end
     else
-      type1.print_type
-      type2.print_type
-      write_semantic_error_second_pass("Cannot performed arithmetic expression on #{type1.type_name} #{type1.type.val} at #{type1.type.line_info}  and #{type2.type_name} #{type2.type.val} at #{type2.type.line_info}", @current_symbol_table_final)
+      if type1.type && type2.type
+        write_semantic_error_second_pass("Cannot performed arithmetic expression on #{type1.type_name} #{type1.type.val} at #{type1.type.line_info}  and #{type2.type_name} #{type2.type.val} at #{type2.type.line_info}", @current_symbol_table_final)
+      end
+      return MigrationType.new
     end
+  end
+
+  def initialize_moon_processor
+
   end
 end
