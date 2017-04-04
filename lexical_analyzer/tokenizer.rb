@@ -88,13 +88,49 @@ class Tokenizer
     end
   end
 
+  def handle_single_line_comment
+    until @next_char == "\n"
+      increment
+    end
+    increment
+    @line += 1
+  end
+
+  def handle_multiple_line_comment
+    counter = 1
+    done = false
+    until done or @next_char.nil?
+      if @next_char == "*"
+        increment
+        if @next_char == "/"
+          if counter ==  1
+            done = true
+          else
+            counter -= 1
+          end
+        end
+        increment
+      elsif @next_char == "/"
+        increment
+        if @next_char == "*"
+          counter += 1
+        end
+        increment
+      elsif @next_char == "\n"
+        @line += 1
+        increment
+      else
+        increment
+      end
+    end
+  end
+
   def handle_letter_token
     accumulator = @char
     while can_follow_id?(@next_char)
       accumulator += @next_char
       increment
     end
-
     if KEY_WORDS.include?(accumulator)
       @tokens.push(KeyWordToken.new(accumulator, @line, @index))
     elsif WORD_OPERATORS.include?(accumulator)
@@ -110,7 +146,19 @@ class Tokenizer
   end
 
   def handle_composed_operator(start_operator, follow_operators)
-    if follow_operators.include?(@next_char)
+    if start_operator == "/"
+      puts @next_char
+      if @next_char == "/"
+        increment
+        handle_single_line_comment
+      elsif @next_char == "*"
+        increment
+        handle_multiple_line_comment
+      else
+        @tokens.push(OperatorToken.new(start_operator, @line, @index))
+        increment
+      end
+    elsif follow_operators.include?(@next_char)
       @tokens.push(OperatorToken.new(start_operator + @next_char, @line, @index))
       @index += 2
       increment

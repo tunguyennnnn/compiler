@@ -14,8 +14,10 @@ class Token
 end
 
 class IdToken < Token
+  attr_reader :class_type
   def initialize(token, line_info, index_info)
     super(token, line_info, index_info)
+    @class_type = "Id"
   end
 end
 
@@ -27,8 +29,10 @@ class KeyWordToken < Token
 end
 
 class NumberToken < Token
+  attr_accessor :class_type
   def initialize(token, line_info, index_info)
     super(token, line_info, index_info)
+    @class_type == "Num"
   end
 end
 

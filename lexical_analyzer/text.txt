@@ -1,8 +1,9 @@
 class Foo {
   int abcd;
   float a_xas_1 = 242.9032##;
-
-  int function1(int x){
+  /* dasdadasdadas/*
+  */*/ d = 1;
+  int function1(int x){ // do something
     return x>= 3;
   }
 }
