@@ -324,6 +324,8 @@ class Parsing
       end
     elsif look_ahead_is "("
       if match("(") && (params=fParams()) && match(")")
+        puts "&^&^&^&^&^&^&^&^&^&^&^&^&^&^&^&^&^"
+        puts params
         params_type = params.map{|param| param["type"]}
         row = TableRow.new(@current_symbol_table, 'function', [(the_type.kind_of?(String) ? the_type : the_type.val), params_type])
         @current_symbol_table_final = @current_symbol_table_final.get_table(id, 'function') if second_pass?
@@ -596,8 +598,21 @@ class Parsing
     if look_ahead_is "if"
       if match("if") && match("(")
         expr_type = MigrationType.new
-        if expr(expr_type) && match(")") && match("then") && statBlock() && match("else") && statBlock() && match(";")
-          write "StatementSpecial", "if", "(", "Expr", ")", "then", "StatBlock", "else", "StateBlock", ";"
+        if (expr_value = expr(expr_type)) && match(")") && match("then")
+          if second_pass?
+            code, else_address, end_if_address = @final_table.generate_if_head_code(expr_value)
+            @code_generation.push(code)
+          end
+          if statBlock() && match("else")
+            if second_pass?
+              @code_generation.push("j #{end_if_address}")
+              @code_generation.push("#{else_address}")
+            end
+            if statBlock() && match(";")
+              @code_generation.push("#{end_if_address}")
+              write "StatementSpecial", "if", "(", "Expr", ")", "then", "StatBlock", "else", "StateBlock", ";"
+            end
+          end
         end
       end
     elsif look_ahead_is "for"
@@ -605,13 +620,29 @@ class Parsing
         @current_symbol_table = @current_symbol_table.add_for_loop(id, the_type)
         @current_symbol_table_final = @current_symbol_table_final.get_for_loop() if second_pass?
         expr_type = MigrationType.new
-        if expr(expr_type) && match(";")
-
-          validate_type(MigrationType.new(id.val, the_type), expr_type)
-          if relExpr() && match(";") && assignStat() && match(")") && statBlock() && match(";")
-            @current_symbol_table = @current_symbol_table.parent.table
-            @current_symbol_table_final = @current_symbol_table_final.parent.table if second_pass?
-            write "StatementSpecial", "for", "(", "Type", "idToken", "AssignOp", "Expr", ";", "RelExpr", ";", "AssignStat", ")" && "StatBlock" && ";"
+        if (expr_value = expr(expr_type)) && match(";")
+          if second_pass?
+            validate_type(MigrationType.new(id.val, the_type), expr_type)
+            @code_generation.push(@final_table.generate_assignment_code(id.val, the_type.val, [], expr_value, @current_symbol_table_final))
+            start_loop, go_loop, end_loop = @final_table.generate_for_loop_code(@current_symbol_table_final)
+            @code_generation.push("j #{start_loop}")
+            @code_generation.push("#{go_loop}")
+          end
+          if (relExpr_value = relExpr()) && match(";") && assignStat() && match(")")
+            if second_pass?
+              @code_generation.push("#{start_loop}")
+              @code_generation.push(relExpr_value[0])
+              @code_generation.push(@final_table.generate_for_loop_body_code(relExpr_value[1], end_loop))
+            end
+            if statBlock() && match(";")
+              @current_symbol_table = @current_symbol_table.parent.table
+              if second_pass?
+                @current_symbol_table_final = @current_symbol_table_final.parent.table
+                @code_generation.push("j #{start_loop}")
+                @code_generation.push("#{end_loop}")
+              end
+              write "StatementSpecial", "for", "(", "Type", "idToken", "AssignOp", "Expr", ";", "RelExpr", ";", "AssignStat", ")" && "StatBlock" && ";"
+            end
           end
         end
       end
@@ -681,7 +712,7 @@ class Parsing
       if (arithExpr_value = arithExpr(arith_type)) && (relExprTail_value = relExprTail(arith_type, rel_type, arithExpr_value))
         if second_pass?
           expr_type.copy_type_of(rel_type)
-          return arithExpr_value
+          return relExprTail_value
         end
         write "Expr", "ArithExpr", "RelExprTail"
       end
@@ -704,7 +735,10 @@ class Parsing
         write "RelExprTail", "RelOp", "ArithExpr"
       end
     elsif @set_table["RelExprTail"].follow_set_include? @look_ahead
-      rel_type.copy_type_of(arith_type)  if second_pass?
+      if second_pass?
+        rel_type.copy_type_of(arith_type)
+        return lhs_value
+      end
       write "RelExprTail", "ε"
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
@@ -715,7 +749,9 @@ class Parsing
     if @set_table["ArithExpr"].first_set_include? @look_ahead
       arith_type1, arith_type2 = MigrationType.new, MigrationType.new
       if (lhs_value = arithExpr(arith_type1)) && (rel_value = relOp()) && (rhs_value = arithExpr(arith_type2))
-        puts "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+        if second_pass?
+          return @final_table.generate_relative_code(rel_value, lhs_value, rhs_value, @current_symbol_table_final)
+        end
         write "RelExpr", "ArithExpr", "RelOp", "ArithExpr"
       end
     else
@@ -741,10 +777,10 @@ class Parsing
   def arithExprD_star(term_type, arith_types, term_value)
     if @set_table["ArithExprD"].first_set_include? @look_ahead
       arithExprD_type, arithExprD_types = MigrationType.new, MigrationType.new
-      if (arithExprD_value = arithExprD(arithExprD_type)) && (arithExprD_star_value = arithExprD_star(arithExprD_type, arithExprD_types, arithExprD_value))
+      if (arithExprD_value = arithExprD(arithExprD_type)) && (arithExprD_star_value = arithExprD_star(arithExprD_type, arithExprD_types, arithExprD_value[1]))
         if second_pass?
           arith_types.copy_type_of(semcheckop(term_type, arithExprD_types))
-          first_code, second_code = @final_table.generate_rhs_add_code(term_value, arithExprD_star_value, @current_symbol_table_final)
+          first_code, second_code = @final_table.generate_rhs_add_code(arithExprD_value[0], term_value, arithExprD_star_value, @current_symbol_table_final)
           @code_generation.push(first_code)
           return second_code
         end
@@ -764,12 +800,13 @@ class Parsing
   def arithExprD(arithExprD_type)
     if @set_table["AddOp"].first_set_include? @look_ahead
       term_type = MigrationType.new
-      if addOp() && (term_value = term(term_type))
+      if (addOp_value=addOp()) && (term_value = term(term_type))
         if second_pass?
           arithExprD_type.copy_type_of(term_type)
-          return term_value
+          return addOp_value, term_value
         end
-        return write "ArithExprD", "AddOp", "Term"
+        write "ArithExprD", "AddOp", "Term"
+        return []
       end
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
@@ -794,10 +831,10 @@ class Parsing
   def termD_star(term_type, termD_types, factor_value)
     if @set_table["TermD"].first_set_include? @look_ahead
       termD_type, termD_types_prime = MigrationType.new, MigrationType.new
-      if (termD_value = termD(termD_type)) && (termD_star_value = termD_star(termD_type, termD_types_prime, termD_value))
+      if (termD_value = termD(termD_type)) && (termD_star_value = termD_star(termD_type, termD_types_prime, termD_value[1]))
         if second_pass?
           termD_types.copy_type_of(semcheckop(termD_type, termD_types_prime))
-          first_code, second_code = @final_table.generate_rhs_mulp_code(factor_value, termD_star_value, @current_symbol_table_final)
+          first_code, second_code = @final_table.generate_rhs_mulp_code(termD_value[0], factor_value, termD_star_value, @current_symbol_table_final)
           @code_generation.push(first_code)
           return second_code
         end
@@ -817,13 +854,14 @@ class Parsing
   def termD(termD_type)
     if @set_table["MultOp"].first_set_include? @look_ahead
       factor_type = MigrationType.new
-      if mulOp() && (factor_value  = factor(factor_type))
+      if (mulOp_value = mulOp()) && (factor_value  = factor(factor_type))
         write "TermD", "MulOp", "Factor"
         if second_pass?
           termD_type.copy_type_of(factor_type)
-          return factor_value
+          return mulOp_value = factor_value
         end
         write "TermD", "MulOp", "Factor"
+        return []
       end
     else
       write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"

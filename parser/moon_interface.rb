@@ -81,9 +81,36 @@ class MoonInterface
   end
 
   def generate_end_not_address
-    @end_number = @end_number || 0
-    address = "endnot#{@end_number}"
-    @end_number += 1
+    @end_not_number = @end_not_number || 0
+    address = "endnot#{@end_not_number}"
+    @end_not_number += 1
     return address
+  end
+
+  def generate_end_and_address
+    @end_and_number = @end_and_number || 0
+    address = "endand#{@end_and_number}"
+    @end_and_number += 1
+    return address
+  end
+
+  def generate_else_address
+    @else_number = @else_number || 0
+    address = "else#{@else_number}"
+    @else_number += 1
+    return address
+  end
+
+  def generate_end_if_address
+    @end_if_number = @end_if_number || 0
+    address = "endif#{@end_if_number}"
+    @end_if_number += 1
+    return address
+  end
+
+  def generate_loop_symbols
+    number = @loop_symbol_number = @loop_symbol_number || 0
+    @loop_symbol_number += 1
+    return "startloop#{number}", "goloop#{number}","endloop#{number}"
   end
 end

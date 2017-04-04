@@ -252,6 +252,18 @@ class SymbolTable < Hash
     end
   end
 
+  def generate_for_loop_code(current_table)
+    return @moon_interface.generate_loop_symbols
+  end
+
+  def generate_for_loop_body_code(condition, end_loop)
+    register = @moon_interface.take_a_register
+    r_name = register.register_name
+    register.free
+    return "lw #{r_name},#{condition}\n" +
+           "bnz #{r_name},#{end_loop}"
+  end
+
   def generate_rhs_code(name, type, size, current_table)
     if size.size == 0
       return "", "#{current_table.generate_name}_variable-#{name}(r0)"
@@ -263,75 +275,95 @@ class SymbolTable < Hash
     end
   end
 
-  def generate_rhs_add_code(lhs, rhs, current_table)
-    if lhs.is_a? Numeric and rhs.is_a? Numeric
-      register = @moon_interface.take_a_register
-      register_name = register.register_name
-      register.free
-      unique_address = @moon_interface.generate_unique_address
-      return "addi #{register_name},#{lhs},#{rhs}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{register_name}", "#{unique_address}(r0)"
-    elsif lhs.is_a? Numeric and rhs.is_a? String
-      register = @moon_interface.take_a_register
-      register_name = register.register_name
-      register.free
-      second_register = @moon_interface.take_a_register
-      second_register_name = second_register.register_name
-      unique_address = @moon_interface.generate_unique_address
-      register.free
-      second_register.free
-      return "lw #{register_name},#{rhs}\naddi #{second_register_name},#{register_name},#{lhs}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{second_register_name}", "#{unique_address}(r0)"
-    elsif rhs.is_a? Numeric and lhs.is_a? String
-      register = @moon_interface.take_a_register
-      register_name = register.register_name
-      register.free
-      second_register = @moon_interface.take_a_register
-      second_register_name = second_register.register_name
-      unique_address = @moon_interface.generate_unique_address
-      register.free
-      second_register.free
-      return "lw #{register_name},#{lhs}\naddi #{second_register_name},#{register_name},#{rhs}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{second_register_name}", "#{unique_address}(r0)"
+  def generate_rhs_add_code(addOp_value,lhs, rhs, current_table)
+    if ["+", "-"].include? addOp_value
+      add_assembly = (addOp_value == "+" ? "add" : "sub")
+      if lhs.is_a? Numeric and rhs.is_a? Numeric
+        register = @moon_interface.take_a_register
+        register_name = register.register_name
+        register.free
+        unique_address = @moon_interface.generate_unique_address
+        return "#{add_assembly}i #{register_name},#{lhs},#{rhs}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{register_name}", "#{unique_address}(r0)"
+      elsif lhs.is_a? Numeric and rhs.is_a? String
+        register = @moon_interface.take_a_register
+        register_name = register.register_name
+        register.free
+        second_register = @moon_interface.take_a_register
+        second_register_name = second_register.register_name
+        unique_address = @moon_interface.generate_unique_address
+        register.free
+        second_register.free
+        return "lw #{register_name},#{rhs}\n#{add_assembly}i #{second_register_name},#{lhs},#{register_name}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{second_register_name}", "#{unique_address}(r0)"
+      elsif rhs.is_a? Numeric and lhs.is_a? String
+        register = @moon_interface.take_a_register
+        register_name = register.register_name
+        register.free
+        second_register = @moon_interface.take_a_register
+        second_register_name = second_register.register_name
+        unique_address = @moon_interface.generate_unique_address
+        register.free
+        second_register.free
+        return "lw #{register_name},#{lhs}\n#{add_assembly}i #{second_register_name},#{register_name},#{rhs}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{second_register_name}", "#{unique_address}(r0)"
+      else
+        register_one = @moon_interface.take_a_register
+        register_two = @moon_interface.take_a_register
+        register_three = @moon_interface.take_a_register
+        r1_name = register_one.register_name
+        r2_name = register_two.register_name
+        r3_name = register_three.register_name
+        register_one.free
+        register_two.free
+        register_three.free
+        unique_address = @moon_interface.generate_unique_address
+        return "lw #{r1_name},#{rhs}\nlw #{r2_name},#{lhs}\n#{add_assembly} #{r3_name},#{r1_name},#{r2_name}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{r3_name}", "#{unique_address}(r0)"
+      end
     else
-      register_one = @moon_interface.take_a_register
-      register_two = @moon_interface.take_a_register
-      register_three = @moon_interface.take_a_register
-      r1_name = register_one.register_name
-      r2_name = register_two.register_name
-      r3_name = register_three.register_name
-      register_one.free
-      register_two.free
-      register_three.free
-      unique_address = @moon_interface.generate_unique_address
-      return "lw #{r1_name},#{rhs}\nlw #{r2_name},#{lhs}\nadd #{r3_name},#{r1_name},#{r2_name}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{r3_name}", "#{unique_address}(r0)"
+
     end
   end
 
-  def generate_rhs_mulp_code(lhs, rhs, current_table)
-    if lhs.is_a? Numeric and rhs.is_a? Numeric
-      register = @moon_interface.take_a_register
-      register_name = register.register_name
-      register.free
-      unique_address = @moon_interface.generate_unique_address
-      return "muli #{register_name},#{lhs},#{rhs}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{register_name}", "#{unique_address}(r0)"
-    elsif lhs.is_a? Numeric and rhs.is_a? String
-      register = @moon_interface.take_a_register
-      register_name = register.register_name
-      register.free
-      second_register = @moon_interface.take_a_register
-      second_register_name = second_register.register_name
-      unique_address = @moon_interface.generate_unique_address
-      register.free
-      second_register.free
-      return "lw #{register_name},#{rhs}\nmuli #{second_register_name},#{register_name},#{lhs}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{second_register_name}", "#{unique_address}(r0)"
-    elsif rhs.is_a? Numeric and lhs.is_a? String
-      register = @moon_interface.take_a_register
-      register_name = register.register_name
-      register.free
-      second_register = @moon_interface.take_a_register
-      second_register_name = second_register.register_name
-      unique_address = @moon_interface.generate_unique_address
-      register.free
-      second_register.free
-      return "lw #{register_name},#{lhs}\nmuli #{second_register_name},#{register_name},#{rhs}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{second_register_name}", "#{unique_address}(r0)"
+  def generate_rhs_mulp_code(mulOp_value, lhs, rhs, current_table)
+    if ["*", "/"].include? mulOp_value
+      mul_assembly = (mulOp_value == "*" ? "mul" : "div")
+      if lhs.is_a? Numeric and rhs.is_a? Numeric
+        register = @moon_interface.take_a_register
+        register_name = register.register_name
+        register.free
+        unique_address = @moon_interface.generate_unique_address
+        return "#{mul_assembly}i #{register_name},#{lhs},#{rhs}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{register_name}", "#{unique_address}(r0)"
+      elsif lhs.is_a? Numeric and rhs.is_a? String
+        register = @moon_interface.take_a_register
+        register_name = register.register_name
+        register.free
+        second_register = @moon_interface.take_a_register
+        second_register_name = second_register.register_name
+        unique_address = @moon_interface.generate_unique_address
+        register.free
+        second_register.free
+        return "lw #{register_name},#{rhs}\n#{mul_assembly}i #{second_register_name},#{lhs},#{register_name}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{second_register_name}", "#{unique_address}(r0)"
+      elsif rhs.is_a? Numeric and lhs.is_a? String
+        register = @moon_interface.take_a_register
+        register_name = register.register_name
+        register.free
+        second_register = @moon_interface.take_a_register
+        second_register_name = second_register.register_name
+        unique_address = @moon_interface.generate_unique_address
+        register.free
+        second_register.free
+        return "lw #{register_name},#{lhs}\n#{mul_assembly}i #{second_register_name},#{register_name},#{rhs}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{second_register_name}", "#{unique_address}(r0)"
+      else
+        register_one = @moon_interface.take_a_register
+        register_two = @moon_interface.take_a_register
+        register_three = @moon_interface.take_a_register
+        r1_name = register_one.register_name
+        r2_name = register_two.register_name
+        r3_name = register_three.register_name
+        register_one.free
+        register_two.free
+        register_three.free
+        unique_address = @moon_interface.generate_unique_address
+        return "lw #{r1_name},#{rhs}\nlw #{r2_name},#{lhs}\n#{mul_assembly} #{r3_name},#{r1_name},#{r2_name}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{r3_name}", "#{unique_address}(r0)"
+      end
     else
       register_one = @moon_interface.take_a_register
       register_two = @moon_interface.take_a_register
@@ -343,14 +375,44 @@ class SymbolTable < Hash
       register_two.free
       register_three.free
       unique_address = @moon_interface.generate_unique_address
-      return "lw #{r1_name},#{rhs}\nlw #{r2_name},#{lhs}\nmul #{r3_name},#{r1_name},#{r2_name}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{r3_name}", "#{unique_address}(r0)"
+      zero_address = @moon_interface.generate_zero_address
+      end_address = @moon_interface.generate_end_and_address
+      return "lw #{r1_name},#{lhs}\n" +
+             "lw #{r2_name},#{rhs}\n" +
+             "and #{r3_name},#{r1_name},#{r2_name}\n"+
+             "#{unique_address} dw 0\n" +
+             "bz #{r3_name},#{zero_address}\n"+
+             "addi #{r1_name}, r0, 1\n" +
+             "sw #{unique_address}(r0),#{r1_name}\n" +
+             "j #{end_address}\n" +
+             "#{zero_address} sw #{unique_address}(r0), r0\n" +
+             "#{end_address}",
+             "#{unique_address}(r0)"
     end
+  end
+
+  def generate_if_head_code(rel_body)
+    register_1 = @moon_interface.take_a_register
+    r1_name = register_1.register_name
+    register_1.free
+    else_address = @moon_interface.generate_else_address
+    end_if_address = @moon_interface.generate_end_if_address
+    return "lw #{r1_name},#{rel_body}\n" +
+           "bz #{r1_name},#{else_address}\n", else_address, end_if_address
   end
 
   def generate_relative_code(operator, lhs, rhs, current_table)
     case operator
     when "=="
       rel_operator = "ceq"
+    when ">"
+      rel_operator = "cgt"
+    when "<"
+      rel_operator = "clt"
+    when ">="
+      rel_operator = "cge"
+    when "<="
+      rel_operator = "cle"
     else
     end
     if lhs.is_a? Numeric and rhs.is_a? Numeric

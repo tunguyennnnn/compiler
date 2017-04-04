@@ -69,7 +69,20 @@ def run_parser
       x = x +2;
       x = x + x + 5 + x;
       x = not x;
-      x = x == 1;
+      x = x > x;
+      x = x and d[1];
+      if (x > 3) then {
+        if (x > 20) then {
+          x = 1;
+        }else{
+          x = d[1];
+        };
+      }else{
+        x = 0;
+      };
+      for (int i = 0; i < 20; i = i + 10){
+        x = 100;
+      };
     };
     "
   end
