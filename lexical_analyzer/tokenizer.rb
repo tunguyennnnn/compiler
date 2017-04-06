@@ -156,7 +156,6 @@ class Tokenizer
         handle_multiple_line_comment
       else
         @tokens.push(OperatorToken.new(start_operator, @line, @index))
-        increment
       end
     elsif follow_operators.include?(@next_char)
       @tokens.push(OperatorToken.new(start_operator + @next_char, @line, @index))
