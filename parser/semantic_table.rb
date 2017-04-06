@@ -99,6 +99,19 @@ class SymbolTable < Hash
     return loop_table
   end
 
+  def find_variable(id)
+    match_key = self.keys.keep_if{ |key| key.val == id.val}.first
+    if match_key
+      return self[match_key]
+    else
+      if self.parent
+        return self.parent.table.find_type(id)
+      else
+        return nil
+      end
+    end
+  end
+
   def find_type(id)
     match_key = self.keys.keep_if{ |key| key.val == id.val}.first
     if match_key
@@ -201,7 +214,8 @@ class SymbolTable < Hash
   end
 
   def generate_variable_declaration_code(name, type, size, current_table)
-    variable_name = "#{current_table.generate_name}_variable-#{name}"
+    kind = current_table.find_variable(name).kind
+    variable_name = "#{current_table.generate_name}_#{kind}-#{name}"
     if ["int", "float"].include? type
       if size.size == 0
         @moon_interface.generate_memory_allocation(variable_name, type=="int"? 1: 2)
@@ -226,7 +240,8 @@ class SymbolTable < Hash
   def generate_assignment_code(lsh_name, type, size, rhs, current_table)
     register = @moon_interface.take_a_register
     register_name = register.register_name
-    lsh_name = "#{current_table.generate_name}_variable-#{lsh_name}"
+    kind = current_table.find_variable(lsh_name).kind
+    lsh_name = "#{current_table.generate_name}_#{kind}-#{lsh_name}"
     if rhs.is_a? Numeric
       if size.size == 0
         register.free
@@ -236,7 +251,7 @@ class SymbolTable < Hash
         size_register_name = size_register.register_name
         register.free
         size_register.free
-        return "sub #{register_name},#{register_name},#{register_name}\naddi #{register_name},#{register_name},#{rhs}\nsub #{size_register_name},#{size_register_name},#{size_register_name}\naddi #{size_register_name},#{size_register_name},#{size.map{|i| i.to_i}.inject(:*)}\nsw #{lsh_name}(#{size_register_name}),#{register_name}"
+        return "sub #{register_name},#{register_name},#{register_name}\naddi #{register_name},#{register_name},#{rhs}\nsub #{size_register_name},#{size_register_name},#{size_register_name}\naddi #{size_register_name},#{size_register_name},#{size.map{|i| i.to_i + 1}.inject(:*)}\nsw #{lsh_name}(#{size_register_name}),#{register_name}"
       end
     elsif rhs.is_a? String
       if size.size == 0
@@ -247,7 +262,7 @@ class SymbolTable < Hash
         size_register_name = size_register.register_name
         size_register.free
         register.free
-        return "sub #{register_name},#{register_name},#{register_name}\naddi #{register_name},#{register_name},#{rhs[0]}\nsub #{size_register_name},#{size_register_name},#{size_register_name}\naddi #{size_register_name},#{size_register_name},#{size.map{|i| i.to_i}.inject(:*)}\nsw #{lsh_name}(#{size_register_name}),#{register_name}"
+        return "sub #{register_name},#{register_name},#{register_name}\naddi #{register_name},#{register_name},#{rhs}\nsub #{size_register_name},#{size_register_name},#{size_register_name}\naddi #{size_register_name},#{size_register_name},#{size.map{|i| i.to_i + 1}.inject(:*)}\nsw #{lsh_name}(#{size_register_name}),#{register_name}"
       end
     end
   end
@@ -265,13 +280,14 @@ class SymbolTable < Hash
   end
 
   def generate_rhs_code(name, type, size, current_table)
+    kind = current_table.find_variable(name).kind
     if size.size == 0
-      return "", "#{current_table.generate_name}_variable-#{name}(r0)"
+      return "", "#{current_table.generate_name}_#{kind}-#{name}(r0)"
     else
       register = @moon_interface.take_a_register
       register_name = register.register_name
       register.free
-      return "sub #{register_name},#{register_name},#{register_name}\naddi #{register_name},#{register_name},#{size.map{|i| i.to_i}.inject(:*)}", "#{current_table.generate_name}_variable-#{name}(#{register_name})"
+      return "sub #{register_name},#{register_name},#{register_name}\naddi #{register_name},#{register_name},#{size.map{|i| i.to_i + 1}.inject(:*)}", "#{current_table.generate_name}_#{kind}-#{name}(#{register_name})"
     end
   end
 
@@ -519,17 +535,65 @@ class SymbolTable < Hash
     end
   end
 
+  def generate_function_head_code(fn_name, parameters, current_table)
+    params_code = ""
+    registers = []
+    parameters.each do |param|
+      register = @moon_interface.take_a_register
+      r_name = register.register_name
+      registers.push(register)
+      params_code += "#{fn_name}_#{param["id"].val} dw 0\nsw #{fn_name}_#{param["id"].val}(r0),#{r_name}\n"
+    end
+    registers.each{|r| r.free}
+    return "#{fn_name}res dw 0\n#{params_code}"
+  end
+
+  def generate_function_end_code(fn_name, return_address)
+    first_register = @moon_interface.take_a_register
+    second_register = @moon_interface.take_a_register
+    r1_name = first_register.register_name
+    r2_name = second_register.register_name
+    first_register.free
+    second_register.free
+    return "lw #{r1_name},#{return_address}\nsw #{fn_name}res(r0),#{r1_name}\njr #{r2_name}"
+  end
+
   def get_size_of(type)
     @memory_allocation[type].size
   end
 
   def generate_name
-    "#{@type}-#{@id}"
+    "#{@type}-#{@id.val}"
+  end
+
+  def get_offset_of(class_name, variable_name)
+    unless ["int", "float"].include? class_name
+      the_class = self.memory_allocation[class_name]
+      if the_class
+        off_set = []
+        the_class.info.each_with_index do |variable|
+          if variable.keys.first.include?("variable-#{variable_name}")
+            break
+          else
+            if variable[variable.keys.first].size > 0
+              off_set += variable[variable.keys.first]
+            else
+              off_set += ["0"]
+            end
+          end
+        end
+        return off_set
+      else
+        return [0]
+      end
+    else
+      return [0]
+    end
   end
 end
 
 class MemoryAllocation
-  attr_accessor :name, :type, :size
+  attr_accessor :name, :type, :size, :info
   def initialize(name, type, root)
     @name = name
     @type = type
