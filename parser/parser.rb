@@ -352,8 +352,12 @@ class Parsing
 
           @current_symbol_table = @current_symbol_table.parent ? @current_symbol_table.parent.table : @global_table
           if second_pass?
-            @code_generation.push(@final_table.generate_function_end_code(id.val, funcBody_value))
             @current_symbol_table_final = @current_symbol_table_final.parent ? @current_symbol_table_final.parent.table : @final_table
+            if funcBody_value == true
+              return write_semantic_error_second_pass("Missing return statement for method #{id.val} of class #{@current_symbol_table_final.id.val}", @final_table)
+            else
+              @code_generation.push(@final_table.generate_function_end_code(id.val, funcBody_value))
+            end
           end
           if funcDef_star()
             write "VarOrFuncDecl", "FParams", ")", "FuncBody", ";", "FuncDecls"
@@ -1098,7 +1102,6 @@ class Parsing
       varHead_type = MigrationType.new
       if second_pass?
         its_type = current_table.find_type(id_type.type)
-        id_type.print_type
         if its_type
           type, size = its_type
           if size.size == the_size.size
@@ -1153,6 +1156,8 @@ class Parsing
                   return write_semantic_error_second_pass("Undefined type #{type} of #{the_type.val} at #{the_type.line_info}", @final_table)
                 end
               end
+            else
+              return write_semantic_error_second_pass("Undefined variable #{variable_type.type.val} at #{  variable_type.type.line_info}", @current_symbol_table_final)
             end
           end
         end

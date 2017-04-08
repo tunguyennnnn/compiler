@@ -519,6 +519,10 @@ class TestParser < Minitest::Test
     @tokenizer = Tokenizer.new
     @tokenizer.text = "program{
       X_type x[1]2]][3];
+      x[2 + 2 * x and y] = 100;
+      for (int i = 0; i < 10; i = i + 1)
+        x = 3;
+        ;
     };
     int randomize(X_type x[1]2][2], int y[2]){
 

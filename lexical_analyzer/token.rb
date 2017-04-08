@@ -1,6 +1,6 @@
 class Token
   attr_reader :val, :line_info, :start_index, :end_index
-
+  attr_writer :val
   def initialize(token, line_info, index_info)
     @val = token
     @line_info = line_info

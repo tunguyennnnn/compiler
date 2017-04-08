@@ -215,26 +215,31 @@ class SymbolTable < Hash
   end
 
   def generate_variable_declaration_code(name, type, size, current_table)
-    kind = current_table.find_variable(name).kind
-    variable_name = "#{current_table.generate_name}_#{kind}-#{name}"
-    if ["int", "float"].include? type
-      if size.size == 0
-        @moon_interface.generate_memory_allocation(variable_name, type=="int"? 1: 2)
-        return "#{variable_name}    dw 0"
+    found = current_table.find_variable(name)
+    if found
+      kind = found.kind
+      variable_name = "#{current_table.generate_name}_#{kind}-#{name}"
+      if ["int", "float"].include? type
+        if size.size == 0
+          @moon_interface.generate_memory_allocation(variable_name, type=="int"? 1: 2)
+          return "#{variable_name}    dw 0"
+        else
+          memory_size = size.map{|i| i.to_i}.inject(:*) * (type=="int"? 1: 2)
+          @moon_interface.generate_memory_allocation(variable_name, memory_size)
+          return "#{variable_name}    res #{memory_size}"
+        end
       else
-        memory_size = size.map{|i| i.to_i}.inject(:*) * (type=="int"? 1: 2)
+        if size.size == 0
+          size = [1]
+        else
+          size = size.map{|i| i.to_i}
+        end
+        memory_size = size.map{|i| i.to_i}.inject(:*) * get_size_of(type)
         @moon_interface.generate_memory_allocation(variable_name, memory_size)
         return "#{variable_name}    res #{memory_size}"
       end
     else
-      if size.size == 0
-        size = [1]
-      else
-        size = size.map{|i| i.to_i}
-      end
-      memory_size = size.map{|i| i.to_i}.inject(:*) * get_size_of(type)
-      @moon_interface.generate_memory_allocation(variable_name, memory_size)
-      return "#{variable_name}    res #{memory_size}"
+      return "",""
     end
   end
 
@@ -282,14 +287,19 @@ class SymbolTable < Hash
 
 
   def generate_rhs_code(name, type, size, current_table)
-    kind = current_table.find_variable(name).kind
-    if size.size == 0
-      return "", "#{current_table.generate_name}_#{kind}-#{name}(r0)"
+    found = current_table.find_variable(name)
+    if found
+        kind = found.kind
+      if size.size == 0
+        return "", "#{current_table.generate_name}_#{kind}-#{name}(r0)"
+      else
+        register = @moon_interface.take_a_register
+        register_name = register.register_name
+        register.free
+        return "sub #{register_name},#{register_name},#{register_name}\n"  + "addi #{register_name},#{register_name},#{size.map{|i| i.to_i + 1}.inject(:*)}", "#{current_table.generate_name}_#{kind}-#{name}(#{register_name})"
+      end
     else
-      register = @moon_interface.take_a_register
-      register_name = register.register_name
-      register.free
-      return "sub #{register_name},#{register_name},#{register_name}\n"  + "addi #{register_name},#{register_name},#{size.map{|i| i.to_i + 1}.inject(:*)}", "#{current_table.generate_name}_#{kind}-#{name}(#{register_name})"
+      return "",""
     end
   end
 
@@ -336,7 +346,29 @@ class SymbolTable < Hash
         return "lw #{r1_name},#{rhs}\n"  + "lw #{r2_name},#{lhs}\n"  + "#{add_assembly} #{r3_name},#{r1_name},#{r2_name}\n"  + "#{unique_address} dw 0\n"  + "sw #{unique_address}(r0),#{r3_name}", "#{unique_address}(r0)"
       end
     else
-
+      register_one = @moon_interface.take_a_register
+      register_two = @moon_interface.take_a_register
+      register_three = @moon_interface.take_a_register
+      r1_name = register_one.register_name
+      r2_name = register_two.register_name
+      r3_name = register_three.register_name
+      register_one.free
+      register_two.free
+      register_three.free
+      unique_address = @moon_interface.generate_unique_address
+      zero_address = @moon_interface.generate_zero_address
+      end_address = @moon_interface.generate_end_and_address
+      return "lw #{r1_name},#{lhs}\n" +
+             "lw #{r2_name},#{rhs}\n" +
+             "or #{r3_name},#{r1_name},#{r2_name}\n"+
+             "#{unique_address} dw 0\n" +
+             "bz #{r3_name},#{zero_address}\n"+
+             "addi #{r1_name}, r0, 1\n" +
+             "sw #{unique_address}(r0),#{r1_name}\n" +
+             "j #{end_address}\n" +
+             "#{zero_address} sw #{unique_address}(r0), r0\n" +
+             "#{end_address}",
+             "#{unique_address}(r0)"
     end
   end
 
