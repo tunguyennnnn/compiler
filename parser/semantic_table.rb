@@ -23,12 +23,14 @@ class ClassRow < TableRow
 end
 
 class MigrationType
-  attr_accessor :type, :type_name, :size, :array
-  def initialize(type=nil, type_name = '', size = 0, array = [])
+  attr_accessor :type, :type_name, :size, :array, :is_function, :params
+  def initialize(type=nil, type_name = '', size = 0, array = [], is_function=false, params = [])
     @type = type
     @type_name = type_name
     @size = size
     @array = array
+    @is_function = is_function
+    @params = params
   end
 
   def copy_type_of(another_type)
@@ -36,14 +38,15 @@ class MigrationType
     @type_name = another_type.type_name
     @size = another_type.size
     @array = another_type.array
+    @is_function = another_type.is_function
+    @params = another_type.params
   end
 
   def print_type
-    puts "variable #{@type.val} type: #{@type_name} size: #{@size} array: #{@array}" if @type
+    puts "variable #{@type.val} type: #{@type_name} size: #{@size} array: #{@array} is function: #{@is_function}" if @type
   end
 
   def is_equal?(type)
-    puts type
     if self.type_name == type[0] && self.size == type[1].size
       return true
     end
@@ -105,7 +108,7 @@ class SymbolTable < Hash
       return self[match_key]
     else
       if self.parent
-        return self.parent.table.find_type(id)
+        return self.parent.table.find_variable(id)
       else
         return nil
       end
@@ -156,8 +159,6 @@ class SymbolTable < Hash
     end
     until pending_classes.empty?
       pending_classes.each do |type, processes|
-        puts "process size  is : #{processes.size}"
-        puts "include is? #{@memory_allocation} and #{type}"
         if @memory_allocation.keys.include? type
           processes.each_with_index do |process, index|
             allocation = process.call()
@@ -167,7 +168,7 @@ class SymbolTable < Hash
               dependency_type, process = allocation
               pending_classes[dependency_type].push(process)
             end
-            puts processes.delete(process)
+            processes.delete(process)
           end
         end
         if pending_classes[type].empty?
@@ -245,24 +246,24 @@ class SymbolTable < Hash
     if rhs.is_a? Numeric
       if size.size == 0
         register.free
-        return "sub #{register_name},#{register_name},#{register_name}\naddi #{register_name},#{register_name},#{rhs}\nsw #{lsh_name}(r0),#{register_name}"
+        return "sub #{register_name},#{register_name},#{register_name}\n"+"addi #{register_name},#{register_name},#{rhs}\n"  + "sw #{lsh_name}(r0),#{register_name}"
       else
         size_register = @moon_interface.take_a_register
         size_register_name = size_register.register_name
         register.free
         size_register.free
-        return "sub #{register_name},#{register_name},#{register_name}\naddi #{register_name},#{register_name},#{rhs}\nsub #{size_register_name},#{size_register_name},#{size_register_name}\naddi #{size_register_name},#{size_register_name},#{size.map{|i| i.to_i + 1}.inject(:*)}\nsw #{lsh_name}(#{size_register_name}),#{register_name}"
+        return "sub #{register_name},#{register_name},#{register_name}\naddi #{register_name},#{register_name},#{rhs}\n"  + "sub #{size_register_name},#{size_register_name},#{size_register_name}\n"  + "addi #{size_register_name},#{size_register_name},#{size.map{|i| i.to_i + 1}.inject(:*)}\n"  + "sw #{lsh_name}(#{size_register_name}),#{register_name}"
       end
     elsif rhs.is_a? String
       if size.size == 0
         register.free
-        return "lw #{register_name},#{rhs}\nsw #{lsh_name},#{register_name}"
+        return "lw #{register_name},#{rhs}\n"  + "sw #{lsh_name},#{register_name}"
       else
         size_register = @moon_interface.take_a_register
         size_register_name = size_register.register_name
         size_register.free
         register.free
-        return "sub #{register_name},#{register_name},#{register_name}\naddi #{register_name},#{register_name},#{rhs}\nsub #{size_register_name},#{size_register_name},#{size_register_name}\naddi #{size_register_name},#{size_register_name},#{size.map{|i| i.to_i + 1}.inject(:*)}\nsw #{lsh_name}(#{size_register_name}),#{register_name}"
+        return "sub #{register_name},#{register_name},#{register_name}\n"  + "addi #{register_name},#{register_name},#{rhs}\n"  + "sub #{size_register_name},#{size_register_name},#{size_register_name}\n"  + "addi #{size_register_name},#{size_register_name},#{size.map{|i| i.to_i + 1}.inject(:*)}\n"  + "sw #{lsh_name}(#{size_register_name}),#{register_name}"
       end
     end
   end
@@ -279,6 +280,7 @@ class SymbolTable < Hash
            "bnz #{r_name},#{end_loop}"
   end
 
+
   def generate_rhs_code(name, type, size, current_table)
     kind = current_table.find_variable(name).kind
     if size.size == 0
@@ -287,7 +289,7 @@ class SymbolTable < Hash
       register = @moon_interface.take_a_register
       register_name = register.register_name
       register.free
-      return "sub #{register_name},#{register_name},#{register_name}\naddi #{register_name},#{register_name},#{size.map{|i| i.to_i + 1}.inject(:*)}", "#{current_table.generate_name}_#{kind}-#{name}(#{register_name})"
+      return "sub #{register_name},#{register_name},#{register_name}\n"  + "addi #{register_name},#{register_name},#{size.map{|i| i.to_i + 1}.inject(:*)}", "#{current_table.generate_name}_#{kind}-#{name}(#{register_name})"
     end
   end
 
@@ -299,7 +301,7 @@ class SymbolTable < Hash
         register_name = register.register_name
         register.free
         unique_address = @moon_interface.generate_unique_address
-        return "#{add_assembly}i #{register_name},#{lhs},#{rhs}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{register_name}", "#{unique_address}(r0)"
+        return "#{add_assembly}i #{register_name},#{lhs},#{rhs}\n"  + "#{unique_address} dw 0\n"  + "sw #{unique_address}(r0),#{register_name}", "#{unique_address}(r0)"
       elsif lhs.is_a? Numeric and rhs.is_a? String
         register = @moon_interface.take_a_register
         register_name = register.register_name
@@ -309,7 +311,7 @@ class SymbolTable < Hash
         unique_address = @moon_interface.generate_unique_address
         register.free
         second_register.free
-        return "lw #{register_name},#{rhs}\n#{add_assembly}i #{second_register_name},#{lhs},#{register_name}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{second_register_name}", "#{unique_address}(r0)"
+        return "lw #{register_name},#{rhs}\n"  + "#{add_assembly}i #{second_register_name},#{lhs},#{register_name}\n"  + "#{unique_address} dw 0\n"  + "sw #{unique_address}(r0),#{second_register_name}", "#{unique_address}(r0)"
       elsif rhs.is_a? Numeric and lhs.is_a? String
         register = @moon_interface.take_a_register
         register_name = register.register_name
@@ -319,7 +321,7 @@ class SymbolTable < Hash
         unique_address = @moon_interface.generate_unique_address
         register.free
         second_register.free
-        return "lw #{register_name},#{lhs}\n#{add_assembly}i #{second_register_name},#{register_name},#{rhs}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{second_register_name}", "#{unique_address}(r0)"
+        return "lw #{register_name},#{lhs}\n"  + "#{add_assembly}i #{second_register_name},#{register_name},#{rhs}\n"  + "#{unique_address} dw 0\n"  + "sw #{unique_address}(r0),#{second_register_name}", "#{unique_address}(r0)"
       else
         register_one = @moon_interface.take_a_register
         register_two = @moon_interface.take_a_register
@@ -331,7 +333,7 @@ class SymbolTable < Hash
         register_two.free
         register_three.free
         unique_address = @moon_interface.generate_unique_address
-        return "lw #{r1_name},#{rhs}\nlw #{r2_name},#{lhs}\n#{add_assembly} #{r3_name},#{r1_name},#{r2_name}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{r3_name}", "#{unique_address}(r0)"
+        return "lw #{r1_name},#{rhs}\n"  + "lw #{r2_name},#{lhs}\n"  + "#{add_assembly} #{r3_name},#{r1_name},#{r2_name}\n"  + "#{unique_address} dw 0\n"  + "sw #{unique_address}(r0),#{r3_name}", "#{unique_address}(r0)"
       end
     else
 
@@ -346,7 +348,7 @@ class SymbolTable < Hash
         register_name = register.register_name
         register.free
         unique_address = @moon_interface.generate_unique_address
-        return "#{mul_assembly}i #{register_name},#{lhs},#{rhs}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{register_name}", "#{unique_address}(r0)"
+        return "#{mul_assembly}i #{register_name},#{lhs},#{rhs}\n"  + "#{unique_address} dw 0\n"  + "sw #{unique_address}(r0),#{register_name}", "#{unique_address}(r0)"
       elsif lhs.is_a? Numeric and rhs.is_a? String
         register = @moon_interface.take_a_register
         register_name = register.register_name
@@ -356,7 +358,7 @@ class SymbolTable < Hash
         unique_address = @moon_interface.generate_unique_address
         register.free
         second_register.free
-        return "lw #{register_name},#{rhs}\n#{mul_assembly}i #{second_register_name},#{lhs},#{register_name}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{second_register_name}", "#{unique_address}(r0)"
+        return "lw #{register_name},#{rhs}\n"  + "#{mul_assembly}i #{second_register_name},#{lhs},#{register_name}\n"  + "#{unique_address} dw 0\n"  + "sw #{unique_address}(r0),#{second_register_name}", "#{unique_address}(r0)"
       elsif rhs.is_a? Numeric and lhs.is_a? String
         register = @moon_interface.take_a_register
         register_name = register.register_name
@@ -366,7 +368,7 @@ class SymbolTable < Hash
         unique_address = @moon_interface.generate_unique_address
         register.free
         second_register.free
-        return "lw #{register_name},#{lhs}\n#{mul_assembly}i #{second_register_name},#{register_name},#{rhs}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{second_register_name}", "#{unique_address}(r0)"
+        return "lw #{register_name},#{lhs}\n"  + "#{mul_assembly}i #{second_register_name},#{register_name},#{rhs}\n"  + "#{unique_address} dw 0\n"  + "sw #{unique_address}(r0),#{second_register_name}", "#{unique_address}(r0)"
       else
         register_one = @moon_interface.take_a_register
         register_two = @moon_interface.take_a_register
@@ -378,7 +380,7 @@ class SymbolTable < Hash
         register_two.free
         register_three.free
         unique_address = @moon_interface.generate_unique_address
-        return "lw #{r1_name},#{rhs}\nlw #{r2_name},#{lhs}\n#{mul_assembly} #{r3_name},#{r1_name},#{r2_name}\n#{unique_address} dw 0\nsw #{unique_address}(r0),#{r3_name}", "#{unique_address}(r0)"
+        return "lw #{r1_name},#{rhs}\n"  + "lw #{r2_name},#{lhs}\n"  + "#{mul_assembly} #{r3_name},#{r1_name},#{r2_name}\n"  + "#{unique_address} dw 0\n"  + "sw #{unique_address}(r0),#{r3_name}", "#{unique_address}(r0)"
       end
     else
       register_one = @moon_interface.take_a_register
@@ -505,7 +507,7 @@ class SymbolTable < Hash
       unique_address_1 = @moon_interface.generate_unique_address
       zero_address = @moon_interface.generate_zero_address
       end_not = @moon_interface.generate_end_not_address
-      return "sub #{first_register_name},#{first_register_name},#{first_register_name},\naddi #{first_register_name},#{first_register_name},#{body}\n" +
+      return "sub #{first_register_name},#{first_register_name},#{first_register_name},\n"  + "addi #{first_register_name},#{first_register_name},#{body}\n" +
              "not #{second_register_name},#{first_register_name}\n" +
              "#{unique_address_1} dw 0\n" +
              "bz #{second_register_name},#{zero_address}\n" +
@@ -524,7 +526,7 @@ class SymbolTable < Hash
       unique_address_1 = @moon_interface.generate_unique_address
       zero_address = @moon_interface.generate_zero_address
       end_not = @moon_interface.generate_end_not_address
-      return "lw #{first_register_name}, #{body}\nnot #{second_register_name},#{first_register_name}\n" +
+      return "lw #{first_register_name}, #{body}\n"  + "not #{second_register_name},#{first_register_name}\n" +
              "#{unique_address_1} dw 0\n" +
              "bz #{second_register_name},#{zero_address}\n" +
              "addi #{first_register_name},r0,1\n" +
@@ -535,27 +537,38 @@ class SymbolTable < Hash
     end
   end
 
+  def generate_rhs_funcall_code(name, type, params,current_table)
+    codes = ""
+    params.each_with_index do |p, i|
+      codes += "lw r#{i + 1},#{p}\n"
+    end
+    unique_address = @moon_interface.generate_unique_address
+    return "#{codes}lw r15,#{unique_address}\n"+
+          "jr #{name}\n" +
+          "#{unique_address}", "#{name}res"
+  end
+
   def generate_function_head_code(fn_name, parameters, current_table)
+    if current_table.parent
+      fn_name = "class-#{current_table.id.val}_#{fn_name}"
+    end
     params_code = ""
     registers = []
     parameters.each do |param|
       register = @moon_interface.take_a_register
       r_name = register.register_name
       registers.push(register)
-      params_code += "#{fn_name}_#{param["id"].val} dw 0\nsw #{fn_name}_#{param["id"].val}(r0),#{r_name}\n"
+      params_code += "#{fn_name}_#{param["id"].val} dw 0\n" +"#{fn_name} sw #{fn_name}_#{param["id"].val}(r0),#{r_name}\n"
     end
     registers.each{|r| r.free}
-    return "#{fn_name}res dw 0\n#{params_code}"
+    return "#{fn_name}res dw 0\n" + "#{params_code}"
   end
 
   def generate_function_end_code(fn_name, return_address)
     first_register = @moon_interface.take_a_register
-    second_register = @moon_interface.take_a_register
     r1_name = first_register.register_name
-    r2_name = second_register.register_name
     first_register.free
-    second_register.free
-    return "lw #{r1_name},#{return_address}\nsw #{fn_name}res(r0),#{r1_name}\njr #{r2_name}"
+    return "lw #{r1_name},#{return_address}\n " + "sw #{fn_name}res(r0),#{r1_name}\n" + "jr r15"
   end
 
   def get_size_of(type)
@@ -563,7 +576,11 @@ class SymbolTable < Hash
   end
 
   def generate_name
-    "#{@type}-#{@id.val}"
+    if self.parent.table.parent && !(self.parent.kind == "for-loop")
+      "method-#{@id.val}"
+    else
+      "#{@type}-#{@id.val}"
+    end
   end
 
   def get_offset_of(class_name, variable_name)

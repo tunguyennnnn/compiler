@@ -16,35 +16,35 @@ def run_parser
     puts text
     tokenizer.text = text
   else
-    # tokenizer.text = "
-    # class Y{
-    #   d p[1][2];
-    # };
-    # class d{
-    #   Q x;
-    # };
-    # class Q{
-    #   float x;
-    #   int d[2][2][4];
-    #   int w(int x, float y){
-    #     for (int i = 0; i < 100; d[2][2][4] = i+ 1){
-    #       if (i > 10) then{
-    #          d[2][2][4] = i+ 1;
-    #       }else{
-    #         i = i -1;
-    #       };
-    #     };
-    #     return (x);
-    #   };
-    # };
-    # program {
-    # int o;
-    # int x[1][3];
-    # Q y[2][3];
-    # Q z;
-    # x[1][2] = 3 + 10 - 20;
-    # y[2][1].d[2][1][2] = 1 + z.w(1, 2.4);
-    # };"
+    tokenizer.text = "
+    class Y{
+      d p[1][2];
+    };
+    class d{
+      Q x;
+    };
+    class Q{
+      float x;
+      int d[2][2][4];
+      int w(int x, float y){
+        for (int i = 0; i < 100; d[2][2][4] = i+ 1){
+          if (i > 10) then{
+             d[2][2][4] = i+ 1;
+          }else{
+            i = i -1;
+          };
+        };
+        return (x);
+      };
+    };
+    program {
+    int o;
+    int x[1][3];
+    Q y[2][3];
+    Q z;
+    x[1][2] = 3 + 10 - 20;
+    y[2][1].d[2][1][2] = 1 + z.w(1, 2.4);
+    };"
 
     # tokenizer.text = "
     # class Y{
@@ -87,48 +87,48 @@ def run_parser
     # };
     # "
 
-    tokenizer.text = "
-    class Y{
-      int o[2][2];
-      int p[1][2];
-    };
-    class d{
-      int x[2];
-    };
-    class Q{
-      int x[2];
-      d z[2][2][4];
-    };
-    program{
-      Y x;
-      int y;
-      y = 0;
-      x.p[2][0] = 10;
-    };
-    int func1(int x, float y){
-      int z;
-      x = 10;
-      z = 100;
-      get(z);
-      return (x);
-    };
-    "
+  # tokenizer.text = "
+  #   class A{
+  #     int x[10][10];
+  #     int func1(A x){
+  #       return (100);
+  #     };
+  #   };
+  #   program{
+  #     int x;
+  #     A y;
+  #     x = square(x) + y.func1(y) * x and x;
+  #   };
+  #   int square(int x){
+  #     x = x * x;
+  #     return (x);
+  #   };
+  # "
   end
   tokenizer.tokenize
   tokenizer.remove_error
   parser = Parsing.new(tokenizer.tokens.dup, table)
-  puts "Parsing result is: #{parser.parse}"
+  parsing_is_correct = parser.parse
+  puts "Parsing result is: #{parsing_is_correct || "False"}"
   parser.write_to_file
-  puts "Semantic result: #{parser.correct_semantic}"
-  puts parser.construct_table(parser.global_table)
-  parser.tokens = tokenizer.tokens
-  parser.final_table = parser.global_table
-  parser.final_table.generate_memory_allocation
-  puts parser.final_table.memory_allocation
-  parser.second_pass = true
-  parser.parse
-  puts "Semantic result second pass is: #{parser.correct_semantic}"
-  puts parser.code_generation
+
+  if parsing_is_correct
+    puts "Semantic result first pass is: #{parser.correct_semantic}"
+    puts parser.construct_table(parser.global_table)
+    parser.tokens = tokenizer.tokens
+    parser.final_table = parser.global_table
+    parser.final_table.generate_memory_allocation
+    parser.second_pass = true
+    parser.parse
+    puts "Semantic result second pass is: #{parser.correct_semantic}"
+    File.open("codes.m", 'w') do |f|
+      codes = ""
+      parser.code_generation.each do |line|
+        codes += line + "\n"
+      end
+      f.write codes
+    end
+  end
 end
 
 

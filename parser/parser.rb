@@ -112,7 +112,6 @@ class Parsing
   end
 
   def write_error(error)
-    throw(error)
     @errors += "#{error}\n"
     nil
   end
@@ -129,8 +128,9 @@ class Parsing
     @correct_semantic = false
     open('semantic_error.txt', 'a'){ |file|
       file.puts message
-      file.puts table
+      file.puts construct_table(table, false)
     }
+    return MigrationType.new
   end
 
   def check_semantic_table()
@@ -269,7 +269,7 @@ class Parsing
         write "Prog", "ProgBody"
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -281,7 +281,7 @@ class Parsing
     elsif @set_table['ClassDecs'].follow_set_include? @look_ahead
       write "ClassDecls", "ε"
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -303,7 +303,7 @@ class Parsing
         end
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -315,7 +315,7 @@ class Parsing
     elsif @set_table["ClassBody"].follow_set_include? @look_ahead
       write "ClassBody", "ε"
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -338,15 +338,21 @@ class Parsing
       if match("(") && (params=fParams()) && match(")")
         params = params.keep_if{|param| param != true}
         params_type = params.map{|param| param["type"]}
+
         row = TableRow.new(@current_symbol_table, 'function', [(the_type.kind_of?(String) ? the_type : the_type.val), params_type])
-        @current_symbol_table_final = @current_symbol_table_final.get_table(id, 'function') if second_pass?
+        if second_pass?
+          @code_generation.push(@final_table.generate_function_head_code(id.val, params, @current_symbol_table_final))
+          @current_symbol_table_final = @current_symbol_table_final.get_table(id, 'function')
+        end
         if add_to_table(@current_symbol_table, id, row)
           row.link = @current_symbol_table = SymbolTable.new(id, 'function', row)
           params.each{|param| add_to_table(@current_symbol_table, param["id"], TableRow.new(@current_symbol_table, 'parameter', param["type"]))}
         end
-        if funcBody() && match(";")
+        if (funcBody_value = funcBody()) && match(";")
+
           @current_symbol_table = @current_symbol_table.parent ? @current_symbol_table.parent.table : @global_table
           if second_pass?
+            @code_generation.push(@final_table.generate_function_end_code(id.val, funcBody_value))
             @current_symbol_table_final = @current_symbol_table_final.parent ? @current_symbol_table_final.parent.table : @final_table
           end
           if funcDef_star()
@@ -355,7 +361,7 @@ class Parsing
         end
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -367,7 +373,7 @@ class Parsing
     elsif @set_table["VarDecls"].follow_set_include? @look_ahead
       write "VarDecls", "ε"
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -379,7 +385,7 @@ class Parsing
     elsif @set_table["FuncDefs"].follow_set_include? @look_ahead
       write "FuncDecls", "ε"
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -410,7 +416,7 @@ class Parsing
         end
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -437,7 +443,7 @@ class Parsing
         end
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -448,7 +454,7 @@ class Parsing
         if second_pass?
           @current_symbol_table_final = @current_symbol_table_final.parent ? @current_symbol_table_final.parent.table : @final_table
           if funcBody_value == true
-            write_semantic_error_second_pass("Missing return statement for function #{func_name}", @final_table)
+            return write_semantic_error_second_pass("Missing return statement for function #{func_name}", @final_table)
           else
             @code_generation.push(@final_table.generate_function_end_code(func_name, funcBody_value))
           end
@@ -456,7 +462,7 @@ class Parsing
         write "FuncDecl", "FuncHead", "FuncBody", ";"
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -469,7 +475,7 @@ class Parsing
         write "FuncBody", "{", "FuncBodyInner", "}"
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -503,7 +509,7 @@ class Parsing
     elsif @set_table["FuncBodyInner"].follow_set_include? @look_ahead
       write "FuncBodyInner", "ε"
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -523,7 +529,7 @@ class Parsing
         end
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -566,19 +572,17 @@ class Parsing
               validate_type(MigrationType.new(the_type, type_name, size.size), expr_type)
               @code_generation.push(@final_table.generate_assignment_code(the_type.val, type_name, size, expr_value, @current_symbol_table_final))
             else
-              write_semantic_error_second_pass("Undefined variable #{the_type.val} at #{the_type.line_info}", @current_symbol_table_final)
+              return write_semantic_error_second_pass("Undefined variable #{the_type.val} at #{the_type.line_info}", @current_symbol_table_final)
             end
           end
           if (statement_star_value = statement_star())
-            puts "reachhhhhhhhhhh"
-            puts statement_star_value if second_pass?
             return statement_star_value if second_pass?
             write "VarDeclorAssignStat", "AssignOp", "Expr", ";", "Statements"
           end
         end
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -591,7 +595,7 @@ class Parsing
         write "VarDecl", "Type", "idToken", "ArraySizes", ";"
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -610,7 +614,7 @@ class Parsing
     elsif @set_table["Statements"].follow_set_include? @look_ahead
       write "Statements", "ε"
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -625,7 +629,7 @@ class Parsing
       write "ArraySizes", "ε"
       return ac_size
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -642,7 +646,7 @@ class Parsing
         write "Statement", "StatementSpecial"
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -713,7 +717,7 @@ class Parsing
       if match("return") && match("(") && (expr_value = expr(expr_type)) && match(")") && match(";")
         if second_pass?
           unless @current_symbol_table_final.parent.type[0] == expr_type.type_name && expr_type.size == 0
-            write_semantic_error_second_pass("Wrong return type of #{expr_type.type.val} at #{expr_type.type.line_info}", @current_symbol_table_final)
+            return write_semantic_error_second_pass("Wrong return type of #{expr_type.type.val} at #{expr_type.type.line_info}", @current_symbol_table_final)
           else
             return expr_value
           end
@@ -721,7 +725,7 @@ class Parsing
         write "StatementSpecial", "return", "(", "Expr", ")", ";"
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -732,13 +736,14 @@ class Parsing
         expr_type = MigrationType.new
         if (expr_value = expr(expr_type))
           if second_pass?
+            validate_type(variable_type, expr_type)
             @code_generation.push(@final_table.generate_assignment_code(variable_value.type.val, variable_value.type_name, variable_value.array, expr_value, @current_symbol_table_final))
           end
           write "AssignStat", "Variable", "AssignOp", "Expr"
         end
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -754,7 +759,7 @@ class Parsing
     elsif @set_table["StatBlock"].follow_set_include? @look_ahead
       write "StatBlock", "ε"
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -770,7 +775,7 @@ class Parsing
         write "Expr", "ArithExpr", "RelExprTail"
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -793,7 +798,7 @@ class Parsing
       end
       write "RelExprTail", "ε"
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -807,7 +812,7 @@ class Parsing
         write "RelExpr", "ArithExpr", "RelOp", "ArithExpr"
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -822,7 +827,7 @@ class Parsing
         write "ArithExpr", "Term", "ArithExprDs"
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -845,7 +850,7 @@ class Parsing
       end
       write "ArithExprDs", "ε"
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -861,7 +866,7 @@ class Parsing
         return []
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -876,7 +881,7 @@ class Parsing
         return write "Term", "Factor", "TermDs"
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -899,7 +904,7 @@ class Parsing
       end
       write "TermDs", "ε"
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -916,7 +921,7 @@ class Parsing
         return []
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -926,9 +931,15 @@ class Parsing
       if (varHead_value = varHead(varHead_type, @current_symbol_table_final))
         if second_pass?
           factor_type.copy_type_of(varHead_type)
-          moon_first, moon_second = @final_table.generate_rhs_code(varHead_value.type.val, factor_type.type, varHead_value.array, @current_symbol_table_final)
-          @code_generation.push(moon_first)
-          return moon_second
+          if varHead_type.is_function
+            first_code, second_code = @final_table.generate_rhs_funcall_code(varHead_type.type.val, varHead_type.type_name, varHead_type.params, @current_symbol_table_final)
+            @code_generation.push(first_code)
+            return second_code
+          else
+            moon_first, moon_second = @final_table.generate_rhs_code(varHead_value.type.val, factor_type.type_name, varHead_value.array, @current_symbol_table_final)
+            @code_generation.push(moon_first)
+            return moon_second
+          end
         end
         write "Factor", "VarHead"
       end
@@ -977,7 +988,7 @@ class Parsing
         write "Factor", "Sign", "Factor"
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -992,7 +1003,7 @@ class Parsing
         write "VarHead", "id", "VarHeadTail"
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -1002,7 +1013,6 @@ class Parsing
       if (the_size=indice_star()) && (varHeadEnd_value = varHeadEnd(id_type, the_size, varHeadTail_type, current_table))
         if second_pass?
           varHeadTail_type.copy_type_of(varHeadTail_type)
-          puts varHeadEnd_value.array
           return MigrationType.new(id_type.type.val, varHeadTail_type.type_name, varHeadTail_type.size, the_size + varHeadEnd_value.array)
         end
         write "VarHeadTail", "Indices", "VarHeadEnd"
@@ -1012,7 +1022,8 @@ class Parsing
       if (varHeadEnd_value = varHeadEnd(id_type, [], varHeadEnd_type, current_table))
         if second_pass?
           varHeadTail_type.copy_type_of(varHeadEnd_type)
-          return MigrationType.new(id_type.val, varHeadEnd_type.type_name, varHeadEnd_type.size, varHeadEnd_value.array)
+
+          return MigrationType.new(id_type.type.val, varHeadEnd_type.type_name, varHeadEnd_type.size, varHeadEnd_value.array)
         end
         write "VarHeadTail", "VarHeadEnd"
       end
@@ -1022,22 +1033,30 @@ class Parsing
           its_type = current_table.find_type(id_type.type)
           if its_type
             type, a_params = its_type
-            if a_params.size == code_params.size
+            if a_params.size == code_params[0].size
               correct_param = true
-              code_params.each_with_index{|p, i|
+              code_params[0].each_with_index{|p, i|
                 unless p.is_equal?(a_params[i])
                   write_semantic_error_second_pass("In correct type passed to function #{id_type.type.val} at #{id_type.type.line_info}", current_table)
                   correct_param = false
                 end
               }
               if correct_param
-                varHeadTail_type.copy_type_of(MigrationType.new(id_type.type, type))
+                if current_table.parent && current_table.parent.kind == "class"
+                  id_type.type.val = "#{current_table.generate_name}_#{id_type.type.val}"
+                else
+                  id_type.type.val = id_type.type.val
+                end
+                varHeadTail_type.copy_type_of(MigrationType.new(id_type.type, type, 0, [], true, code_params[1]))
+                return varHeadTail_type
+              else
+                return write_semantic_error_second_pass("Wrong argument in function #{id_type.type.val} at #{id_type.type.line_info}", current_table)
               end
             else
-              write_semantic_error_second_pass("Wrong number of argument in function #{id_type.type.val} at #{id_type.type.line_info}", current_table)
+              return write_semantic_error_second_pass("Wrong number of argument in function #{id_type.type.val} at #{id_type.type.line_info}", current_table)
             end
           else
-            write_semantic_error_second_pass("No method #{id_type.type.val}", current_table)
+            return write_semantic_error_second_pass("No method #{id_type.type.val}", current_table)
           end
         end
         write "VarHeadTail", "(", "AParams", ")"
@@ -1050,13 +1069,13 @@ class Parsing
           varHeadTail_type.copy_type_of(MigrationType.new(id_type.type, type, size.size))
           return MigrationType.new(id_type.type, type, size.size, [])
         else
-          write_semantic_error_second_pass("Undefined variable #{id_type.type.val} at #{id_type.type.line_info}", current_table)
+          return write_semantic_error_second_pass("Undefined variable #{id_type.type.val} at #{id_type.type.line_info}", current_table)
         end
 
       end
       write "VarHeadTail", "ε"
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -1070,7 +1089,7 @@ class Parsing
       write "Indices", "ε"
       return ac_size
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -1078,23 +1097,21 @@ class Parsing
     if look_ahead_is "."
       varHead_type = MigrationType.new
       if second_pass?
-        puts construct_table(current_table, false)
         its_type = current_table.find_type(id_type.type)
-        puts its_type
         id_type.print_type
         if its_type
           type, size = its_type
           if size.size == the_size.size
             if ["int", "float"].include?(type)
-              write_semantic_error_second_pass("Cant used dot notation for #{id_type.type.val} at #{id_type.type.line_info}", current_table)
+              return write_semantic_error_second_pass("Cant used dot notation for #{id_type.type.val} at #{id_type.type.line_info}", current_table)
             else
               current_table = @final_table.find_class_table(type)
             end
           else
-            write_semantic_error_second_pass("Cannot used dot notation of array #{id_type.type.val} at #{id_type.type.line_info}", current_table)
+            return write_semantic_error_second_pass("Cannot used dot notation of array #{id_type.type.val} at #{id_type.type.line_info}", current_table)
           end
         else
-          write_semantic_error_second_pass("undefined variable #{id_type.type.val} at #{id_type.type.line_info}", current_table)
+          return write_semantic_error_second_pass("undefined variable #{id_type.type.val} at #{id_type.type.line_info}", current_table)
         end
       end
       if match(".") && (varHead_value = varHead(varHead_type, current_table))
@@ -1112,12 +1129,12 @@ class Parsing
           varHeadEnd_type.copy_type_of(MigrationType.new(id_type.type, type, size.size - the_size.size, the_size))
           return MigrationType.new(id_type.type, type, size.size - the_size.size, [])
         else
-          write_semantic_error_second_pass("undefined variable #{id_type.type.val} at #{id_type.type.line_info}", current_table)
+          return write_semantic_error_second_pass("undefined variable #{id_type.type.val} at #{id_type.type.line_info}", current_table)
         end
       end
       write "VarHeadEnd", "ε"
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -1131,10 +1148,9 @@ class Parsing
             its_type = the_table.find_type(the_type.type)
             if its_type
               type, size = its_type
-              puts type
               unless ['int', 'float'].include?(type)
                 unless next_table = @final_table.find_class_table(type)
-                  write_semantic_error_second_pass("Undefined type #{type} of #{the_type.val} at #{the_type.line_info}", @final_table)
+                  return write_semantic_error_second_pass("Undefined type #{type} of #{the_type.val} at #{the_type.line_info}", @final_table)
                 end
               end
             end
@@ -1145,15 +1161,13 @@ class Parsing
           variable_type.copy_type_of(variableTail_type)
           if second_pass?
             ##off_set = @final_table.get_offset_of(type, variable_type.type.val)
-            puts "#{the_size_prime}"
-            puts "#{variableTail_value.array}"
             return MigrationType.new(the_type_prime.val, type, 0, the_size_prime + variableTail_value.array)
           end
           write "Variable", "idToken", "Indices", "VariableTail"
         end
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -1163,8 +1177,6 @@ class Parsing
       if match(".") && (variable_value = variable(variable_type, the_type, the_size, the_table))
         variableTail_type.copy_type_of(variable_type)
         if second_pass?
-          puts "{{{{{{{{{{{{{{{{}}}}}}}}}}}}}}}}"
-          variable_value.print_type
           return variable_value
         end
         write "VariableTail", ".", "Variable"
@@ -1177,12 +1189,12 @@ class Parsing
           variableTail_type.copy_type_of(MigrationType.new(the_type.type, type, size.size - the_size.size, the_size))
           return MigrationType.new(the_type.type, type, size.size - the_size.size, [])
         else
-          write_semantic_error_second_pass("Undefined variable #{the_type.type.val}", @current_symbol_table_final)
+          return write_semantic_error_second_pass("Undefined variable #{the_type.type.val}", @current_symbol_table_final)
         end
       end
       write "VariableTail", "ε"
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -1194,7 +1206,7 @@ class Parsing
         return (arith_type.type ? arith_type.type.val : 1)
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -1206,7 +1218,7 @@ class Parsing
         return int
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -1222,7 +1234,7 @@ class Parsing
         return the_type
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -1236,7 +1248,7 @@ class Parsing
       write "FParams", "ε"
       return []
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -1250,37 +1262,37 @@ class Parsing
       write "FParamsTails", "ε"
       return params
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
-  def aParams(accum = [])
+  def aParams(accum = [], codes = [])
     if @set_table["Expr"].first_set_include? @look_ahead
       expr_type, aParamsTail_type = MigrationType.new, MigrationType.new
-      if expr(expr_type) && aParamsTail_star(accum.push(expr_type))
+      if (expr_value = expr(expr_type)) && aParamsTail_star(accum.push(expr_type), codes.push(expr_value))
         write "AParams", "Expr", "AParamsTails"
-        return accum
+        return accum, codes
       end
     elsif @set_table["AParams"].follow_set_include? @look_ahead
       write "AParams", "ε"
-      return accum
+      return accum, codes
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
-  def aParamsTail_star(accum)
+  def aParamsTail_star(accum, codes)
     if @set_table["AParamsTail"].first_set_include? @look_ahead
       aparamTail_type = MigrationType.new
-      if aParamsTail(aparamTail_type) && aParamsTail_star(accum.push(aparamTail_type))
+      if (aParam_value = aParamsTail(aparamTail_type)) && aParamsTail_star(accum.push(aparamTail_type), codes.push(aParam_value))
         write "AParamsTails", "AParamsTail", "AParamsTails"
-        return accum
+        return accum, codes
       end
     elsif @set_table["AParamsTails"].follow_set_include? @look_ahead
       write "AParamsTails", "ε"
-      return accum
+      return accum, codes
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -1295,7 +1307,7 @@ class Parsing
         return {"id"=> id, "type"=> [(the_type.kind_of?(String) ? the_type : the_type.val), the_size]}
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -1307,34 +1319,35 @@ class Parsing
       end
       if match(",")
         expr_type = MigrationType.new
-        if expr(expr_type)
+        if (expr_value = expr(expr_type))
           aParamsTail_type.copy_type_of(expr_type)
+          return expr_value if second_pass?
           write "aParamsTail", ",", "Expr"
         end
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
   def assignOp
     return match(@look_ahead.val.downcase) if look_ahead_is "="
-    write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+    write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
   end
 
   def relOp
     return match(@look_ahead.val.downcase) if look_ahead_is "==" or look_ahead_is "<>" or look_ahead_is "<" or look_ahead_is ">" or look_ahead_is "<=" or look_ahead_is ">="
-    write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+    write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
   end
 
   def addOp
     return match(@look_ahead.val.downcase) if look_ahead_is "+" or look_ahead_is "-" or look_ahead_is "or"
-    write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+    write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
   end
 
   def mulOp
     return match(@look_ahead.val.downcase) if look_ahead_is "*" or look_ahead_is "/" or look_ahead_is "and"
-    write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+    write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
   end
 
   def sign
@@ -1343,7 +1356,7 @@ class Parsing
         write "Sign", @tokens[@index - 1].val
       end
     else
-      write_error "Error occurs at line: #{@look_ahead} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
+      write_error "Error occurs at line: #{@look_ahead.line_info} index: #{@look_ahead.start_index} token: #{@look_ahead.val}"
     end
   end
 
@@ -1365,15 +1378,15 @@ class Parsing
         return true
       else
         if type1.type && type2.type
-          write_semantic_error_second_pass("Incompatible type of assignment at #{type1.type.line_info} for #{type1.type.val}", @current_symbol_table_final)
+          return write_semantic_error_second_pass("Incompatible type of assignment at #{type1.type.line_info} for #{type1.type.val}", @current_symbol_table_final)
         end
       end
     end
   end
 
   def semcheckop(type1, type2)
-    type1.print_type
-    type2.print_type
+    # type1.print_type
+    # type2.print_type
     if ["int", "float"].include?(type1.type_name) && ["int", "float"].include?(type2.type_name)
       if type1.size == type2.size
         if type1.type_name == type2.type_name
@@ -1384,18 +1397,14 @@ class Parsing
           return type1
         end
       else
-        write_semantic_error_second_pass("uncompatiable types: #{type1.type.val} at #{type1.type.line_info} #{type2.type.val} #{type1.type.line_info}", @final_table)
+        return write_semantic_error_second_pass("uncompatiable types: #{type1.type.val} at #{type1.type.line_info} #{type2.type.val} #{type1.type.line_info}", @final_table)
         return MigrationType.new
       end
     else
       if type1.type && type2.type
-        write_semantic_error_second_pass("Cannot performed arithmetic expression on #{type1.type_name} #{type1.type.val} at #{type1.type.line_info}  and #{type2.type_name} #{type2.type.val} at #{type2.type.line_info}", @current_symbol_table_final)
+        return write_semantic_error_second_pass("Cannot performed arithmetic expression on #{type1.type_name} #{type1.type.val} at #{type1.type.line_info}  and #{type2.type_name} #{type2.type.val} at #{type2.type.line_info}", @current_symbol_table_final)
       end
       return MigrationType.new
     end
-  end
-
-  def initialize_moon_processor
-
   end
 end

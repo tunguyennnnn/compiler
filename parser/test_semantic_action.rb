@@ -368,4 +368,829 @@ class TestSemanticAction < Minitest::Test
     assert_equal(true, parser.correct_semantic)
   end
 
+
+  ##################TEST ATTRIBUTE MIGRATION####################
+
+  def test_wrong_type_assignment
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      program{
+        int x;
+        x = 3.5;
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(false, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+  def test_correct_type_assignment
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      program{
+        int x;
+        x = 3;
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(true, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+  def test_wrong_type_assignment1
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      program{
+        int x[1];
+        x = 3;
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(false, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+  def test_correct_type_assignment1
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      program{
+        int x[1];
+        x[0] = 3;
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(true, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+  def test_wrong_type_assignment2
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      program{
+        float x[1];
+        x[0] = 3;
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(false, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+  def test_correct_type_assignment2
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      program{
+        float x[1];
+        x[0] = 10.0;
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(true, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+
+  def test_wrong_type_assignment3
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      program{
+        float x[1];
+        x[0] = 3 + 3;
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(false, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+  def test_correct_type_assignment3
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      program{
+        float x[1];
+        x[0] = 3.4 + 3;
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(true, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+  def test_wrong_type_assignment4
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      program{
+        float x[1];
+        x[0] = 3 * 3;
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(false, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+  def test_wrong_type_assignment4
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      program{
+        float x[1];
+        float z[1][2];
+        int y;
+        x[0] = 3 + z;
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(false, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+  def test_correct_type_assignment5
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      program{
+        float x[1];
+        float z[1][2];
+        int y;
+        x[0] = 3 + z[0][0];
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(true, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+
+  def test_correct_type_assignment6
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      program{
+        float x[1];
+        float z[1][2];
+        int y;
+        x[0] = y + z[0][1];
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(true, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+  def test_wrong_type_assignment7
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      program{
+        float x[1];
+        float z[1][2];
+        int y;
+        x[0] = 3 and z[0];
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(false, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+  def test_correct_type_assignment7
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      program{
+        float x[1];
+        float z[1][2];
+        int y;
+        x[0] = 3 and z[1][1];
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(true, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+  def test_wrong_argument_funcall
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      program{
+        int x;
+        x = 4;
+        x = square(x, x);
+      };
+      int square(int x){
+        return (x);
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(false, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+  def test_wrong_argument_funcall1
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      program{
+        int x;
+        x = 4;
+        x = square();
+      };
+      int square(int x){
+        return (x);
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(false, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+  def test_wrong_func_return_wrong_type
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      program{
+        int x;
+        x = 4;
+        x = square(x);
+      };
+      int square(int x){
+        float z;
+        x = x * x;
+        return (z);
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(false, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+  def test_correct_call
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      program{
+        int x;
+        x = 4;
+        x = square(x);
+      };
+      int square(int x){
+        x = x * x;
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(false, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+  def test_correct_funcall_assignment
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      program{
+        int x;
+        x = 4;
+        x = square(x);
+      };
+      int square(int x){
+        x = x * x;
+        return (x);
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(true, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+  def test_correct_funcall_assignment1
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      program{
+        int x;
+        x = 4;
+        x = square(x) + 100;
+      };
+      int square(int x){
+        x = x * x;
+        return (x);
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(true, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+
+  def test_correct_funcall_assignment2
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      program{
+        int x;
+        x = 4;
+        x = square(x) + 100.0;
+      };
+      int square(int x){
+        x = x * x;
+        return (x);
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(false, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+
+  def test_correct_funcall_assignment1
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      program{
+        int x;
+        x = 4;
+        x = square(x) + 100;
+      };
+      int square(int x){
+        x = x * x;
+        return (x);
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(true, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+  def test_class_type
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      class A{
+        int x[10][10];
+        int func1(A x){
+          return (100);
+        };
+      };
+      program{
+        int x;
+        A y;
+        x = square(x) + y.x[1][1];
+      };
+      int square(int x){
+        x = x * x;
+        return (x);
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(true, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+  def test_class_type_wrong
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      class A{
+        int x[10][10];
+        int func1(A x){
+          return (100);
+        };
+      };
+      program{
+        int x;
+        A y;
+        x = square(x) + y.x[1];
+      };
+      int square(int x){
+        x = x * x;
+        return (x);
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(false, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+  def test_class_type_correct
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      class A{
+        int x[10][10];
+        int func1(A x){
+          return (100);
+        };
+      };
+      program{
+        int x;
+        A y;
+        x = square(x) + y.x[1][1];
+      };
+      int square(int x){
+        x = x * x;
+        return (x);
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(true, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+  def test_class_type_wrong1
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+      class A{
+        int x[10][10];
+        int func1(A x){
+          return (100);
+        };
+      };
+      program{
+        int x;
+        A y;
+        x = square(x) + y.func1(x);
+      };
+      int square(int x){
+        x = x * x;
+        return (x);
+      };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(false, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+  def test_class_type_correct2
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+    class Y{
+      d p[1][2];
+    };
+    class d{
+      Q x;
+    };
+    class Q{
+      float x;
+      int d[2][2][4];
+    };
+    program{
+      Q y[1][2][3];
+      int x;
+      int d[1];
+      x = 2;
+      d[1]=10;
+      x = d[1];
+      x = 1 + 2;
+      x = 2 + d[1];
+      x = x +2;
+      x = x + x + 5 + x;
+      x = not x;
+      x = x > x;
+      x = x and d[1];
+      if (x > 3) then {
+        if (x > 20) then {
+          x = 1;
+        }else{
+          x = d[1];
+        };
+      }else{
+        x = 0;
+      };
+      for (int i = 0; i < 20; i = i + 10){
+        x = 100;
+      };
+      y[1][1][1].x = y[1][2][1].x;
+    };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(true, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
+
+  def test_class_type_correct2
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+    class Y{
+      d p[1][2];
+    };
+    class d{
+      Q x;
+    };
+    class Q{
+      float x;
+      int d[2][2][4];
+      int w(int x, float y){
+        for (int i = 0; i < 100; d[2][2][4] = i+ 1){
+          if (i > 10) then{
+             d[2][2][4] = i+ 1;
+          }else{
+            i = i -1;
+          };
+        };
+        return (x);
+      };
+    };
+    program {
+    int o;
+    int x[1][3];
+    Q y[2][3];
+    Q z;
+    x[1][2] = 3 + 10 - 20;
+    y[2][1].d[2][1][2] = 1 + z.w(1, 2.4);
+    };"
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(true, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
 end
