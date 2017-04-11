@@ -8,13 +8,12 @@ class Q{
   float x;
   int d[2][2][4];
   int w(int x, float y){
+    d[2][1][4] = 10;
     for (int i = 0; i < 100; d[2][2][4] = i+ 1){
-      if (i > 10) then{
-         d[2][2][4] = i+ 1;
-      }else{
-        i = i -1;
-      };
+
     };
+    get(d[1][2]);
+    put(1+2);
     return (x);
   };
 };
@@ -24,5 +23,13 @@ int x[1][3];
 Q y[2][3];
 Q z;
 x[1][2] = 3 + 10 - 20;
-y[2][1].d[2][1][2] = 1 + z.w(1, 2.4);
+y[2][1].d[2][1][2] =  1 + z.w(1, 2.4);
+o = square(o);
+y[1][2] = m(a);
+};
+int square(int x){
+  return (x);
+};
+Q m(Q z){
+  return (z);
 };

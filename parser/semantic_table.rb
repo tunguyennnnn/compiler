@@ -216,6 +216,7 @@ class SymbolTable < Hash
 
   def generate_variable_declaration_code(name, type, size, current_table)
     found = current_table.find_variable(name)
+
     if found
       kind = found.kind
       variable_name = "#{current_table.generate_name}_#{kind}-#{name}"
@@ -605,6 +606,37 @@ class SymbolTable < Hash
 
   def get_size_of(type)
     @memory_allocation[type].size
+  end
+
+  def generate_get_code(name, size, current_table)
+    found = current_table.find_variable(name)
+    if found
+      name = "#{current_table.generate_name}_#{name}"
+      if size.size == 0
+        register = @moon_interface.take_a_register
+        r_name = register.register_name
+        register.free
+        return "lw #{r_name},#{name}(r0)\n" +
+                "getc #{r_name}\n" +
+                "sw #{name}(r0),#{r_name}"
+      else
+        r1 = @moon_interface.take_a_register
+        r2 = @moon_interface.take_a_register
+        r1_name = r1.register_name
+        r2_name = r2.register_name
+        r1.free
+        r2.free
+        return "sub #{r1_name},#{r1_name},#{r1_name}\n"+
+               "addi #{r1_name},#{r1_name},#{size.map{|i| i.to_i + 1}.inject(:*)}\n" +
+               "lw #{r2_name},#{name}(#{r1_name})\n"+
+               "getc #{r2_name}\n" +
+               "sw #{name}(#{r1_name}),#{r2_name}"
+      end
+    end
+  end
+
+  def generate_put_code(expr)
+    return "putc #{expr}"
   end
 
   def generate_name

@@ -698,7 +698,7 @@ class Parsing
               @current_symbol_table = @current_symbol_table.parent.table
               if second_pass?
                 @current_symbol_table_final = @current_symbol_table_final.parent.table
-                @code_generation.push("j #{start_loop}")
+                @code_generation.push("j #{go_loop}")
                 @code_generation.push("#{end_loop}")
               end
               write "StatementSpecial", "for", "(", "Type", "idToken", "AssignOp", "Expr", ";", "RelExpr", ";", "AssignStat", ")" && "StatBlock" && ";"
@@ -708,12 +708,18 @@ class Parsing
       end
     elsif look_ahead_is "get"
       variable_type = MigrationType.new
-      if match("get") && match("(") && variable(variable_type) && match(")") && match(";")
+      if match("get") && match("(") && (variable_value = variable(variable_type)) && match(")") && match(";")
+        if second_pass?
+          @code_generation.push(@final_table.generate_get_code(variable_value.type.val, variable_value.array, @current_symbol_table_final))
+        end
         write "StatementSpecial", "get", "(", "Variable", ")", ";"
       end
     elsif look_ahead_is "put"
       expr_type = MigrationType.new
-      if match("put") && match("(") && expr(expr_type) && match(")") && match(";")
+      if match("put") && match("(") && (expr_value = expr(expr_type)) && match(")") && match(";")
+        if second_pass?
+          @code_generation.push(@final_table.generate_put_code(expr_value));
+        end
         write "StatementSpecial", "put", "(", "Expr", ")", ";"
       end
     elsif look_ahead_is "return"

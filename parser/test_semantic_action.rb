@@ -1193,4 +1193,58 @@ class TestSemanticAction < Minitest::Test
       throw "parsing error"
     end
   end
+
+  def test_full_program_with_func_call
+    @tokenizer = Tokenizer.new
+    @tokenizer.text = "
+    class Y{
+      d p[1][2];
+    };
+    class d{
+      Q x;
+    };
+    class Q{
+      float x;
+      int d[2][2][4];
+      int w(int x, float y){
+        d[2][1][4] = 10;
+        for (int i = 0; i < 100; d[2][2][4] = i+ 1){
+
+        };
+        get(d[1][2]);
+        put(1+2);
+        return (x);
+      };
+    };
+    program {
+    int o;
+    int x[1][3];
+    Q y[2][3];
+    Q z;
+    x[1][2] = 3 + 10 - 20;
+    y[2][1].d[2][1][2] =  1 + z.w(1, 2.4);
+    o = square(10);
+    };
+    int square(int x){
+      return (x * x);
+    };
+    Q m(Q z){
+      return (z);
+    };
+    "
+    @tokenizer.tokenize
+    @tokenizer.remove_error
+    parser = Parsing.new(@tokenizer.tokens, @set_table)
+    parsing_is_correct = parser.parse
+    if parsing_is_correct
+      parser.tokens = @tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      assert_equal(true, parser.correct_semantic)
+    else
+      throw "parsing error"
+    end
+  end
 end

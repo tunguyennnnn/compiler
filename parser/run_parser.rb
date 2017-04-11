@@ -42,8 +42,9 @@ def run_parser
     int x[1][3];
     Q y[2][3];
     Q z;
-    x[1][2] = 3 + 10 - 20;
     y[2][1].d[2][1][2] = 1 + z.w(1, 2.4);
+    put(o);
+    get(o);
     };"
 
     # tokenizer.text = "
@@ -61,16 +62,6 @@ def run_parser
     #   Q y[1][2][3];
     #   int x;
     #   int d[1];
-    #   x = 2;
-    #   d[1]=10;
-    #   x = d[1];
-    #   x = 1 + 2;
-    #   x = 2 + d[1];
-    #   x = x +2;
-    #   x = x + x + 5 + x;
-    #   x = not x;
-    #   x = x > x;
-    #   x = x and d[1];
     #   if (x > 3) then {
     #     if (x > 20) then {
     #       x = 1;
@@ -114,19 +105,22 @@ def run_parser
 
   if parsing_is_correct
     puts "Semantic result first pass is: #{parser.correct_semantic}"
-    puts parser.construct_table(parser.global_table)
-    parser.tokens = tokenizer.tokens
-    parser.final_table = parser.global_table
-    parser.final_table.generate_memory_allocation
-    parser.second_pass = true
-    parser.parse
-    puts "Semantic result second pass is: #{parser.correct_semantic}"
-    File.open("codes.m", 'w') do |f|
-      codes = ""
-      parser.code_generation.each do |line|
-        codes += line + "\n"
+    if parser.correct_semantic
+      File.open("semantic_table_printing.txt", 'w') {|f| f.write parser.construct_table(parser.global_table)}
+      puts parser.construct_table(parser.global_table)
+      parser.tokens = tokenizer.tokens
+      parser.final_table = parser.global_table
+      parser.final_table.generate_memory_allocation
+      parser.second_pass = true
+      parser.parse
+      puts "Semantic result second pass is: #{parser.correct_semantic}"
+      File.open("codes.m", 'w') do |f|
+        codes = ""
+        parser.code_generation.each do |line|
+          codes += line + "\n"
+        end
+        f.write codes
       end
-      f.write codes
     end
   end
 end
